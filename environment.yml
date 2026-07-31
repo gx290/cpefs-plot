@@ -1,0 +1,9 @@
+name: meteo
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - xarray
+  - netcdf4
+  - matplotlib
+  - cartopy

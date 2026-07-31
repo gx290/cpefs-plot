@@ -1,0 +1,42 @@
+{
+  "source": {
+    "root_dir": "D:/meteo/data",
+    "directory_template": "{YYYY}/{YYYYMMDD}",
+    "file_pattern": "RY_*.grb.nc"
+  },
+  "batch": {
+    "lookback_hours": 12
+  },
+  "output": {
+    "root_dir": "D:/meteo/output",
+    "directory_template": "{YYYY}/{YYYYMMDD}"
+  },
+  "state": {
+    "directory": "state",
+    "filename_template": "processed_{YYYYMMDD}.json",
+    "retention_days": 30
+  },
+  "filename": {
+    "prefix": "Z_NAFP_BETJ_RY",
+    "height_code": "1001",
+    "region_code": "d02"
+  },
+  "variables": [
+    {
+      "source": "TMP_GDS3_CTL",
+      "name": "cloudtopt",
+      "unit": "K",
+      "display_name": "Cloud Top Temperature",
+      "plot_unit": "°C",
+      "invalid_value": -500
+    },
+    {
+      "source": "HGT_GDS3_CTL",
+      "name": "cloudtoph",
+      "unit": "gpm",
+      "display_name": "Cloud Top Height",
+      "plot_unit": "km",
+      "invalid_value": -5000
+    }
+  ]
+}
