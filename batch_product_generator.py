@@ -5,8 +5,9 @@ from pathlib import Path
 from time import perf_counter
 
 from dataload import CONFIG_FILE, load_config, read_data_from_file
-from plot_cloud_top import (
+from product_plotter import (
     expected_image_paths,
+    parse_product_filename,
     parse_time_details_from_filename,
     parse_time_from_filename,
     plot_source_file,
@@ -65,11 +66,19 @@ def resolve_source_directory(config: dict, tokens: dict[str, str]) -> Path:
     return Path(source_config["root_dir"]) / relative_dir
 
 
-def resolve_output_directory(config: dict, tokens: dict[str, str]) -> Path:
+def resolve_output_directory(
+    config: dict,
+    init_time: datetime,
+    forecast_hour: int,
+) -> Path:
     """根据输出目录模板创建实际图片目录。"""
     output_config = config["output"]
-    relative_dir = render_template(output_config["directory_template"], tokens)
-    output_dir = Path(output_config["root_dir"]) / relative_dir
+    output_dir = (
+        Path(output_config["root_dir"])
+        / output_config["model_directory"]
+        / init_time.strftime("%Y%m%d%H")
+        / f"F{forecast_hour:02d}"
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -317,7 +326,11 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
         file_pattern=config["source"]["file_pattern"],
         lookback_hours=config["batch"]["lookback_hours"],
         output_root=output_root,
-        output_template=config["output"]["directory_template"],
+        output_structure=(
+            f"{config['output']['model_directory']}/"
+            "{YYYYMMDDHH}/F{forecast_hour}/2d/{complete|simple}"
+        ),
+        filename_prefix=config["output"].get("filename_prefix", ""),
         state_retention_days=config["state"]["retention_days"],
     )
     log_event(
@@ -363,8 +376,10 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
 
     for source_file in source_files:
         file_started = perf_counter()
-        file_init_time, forecast_hour = parse_time_from_filename(str(source_file))
-        output_dir = resolve_output_directory(config, build_time_tokens(file_init_time))
+        product_metadata = parse_product_filename(source_file)
+        file_init_time = product_metadata.init_time
+        forecast_hour = product_metadata.forecast_hour
+        output_dir = resolve_output_directory(config, file_init_time, forecast_hour)
         state_file = resolve_state_file(config, file_init_time)
         state = state_cache[state_file]
         key = source_key(source_file, source_root)
@@ -391,7 +406,8 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
             log_event(
                 "DRAW",
                 source=source_file.name,
-                init_time=file_init_time.strftime("%Y%m%d%H%M"),
+                init_time=file_init_time.strftime("%Y%m%d%H"),
+                total_forecast_hours=product_metadata.total_forecast_hours,
                 forecast_hour=forecast_hour,
                 output_dir=output_dir,
             )
@@ -401,7 +417,12 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
             dataset = read_data_from_file(source_file, config)
 
             stage = "plot"
-            log_event("PLOT", source=source_file.name, variables=len(config["variables"]))
+            log_event(
+                "PLOT",
+                source=source_file.name,
+                variables=len(config["variables"]),
+                expected_images=len(expected_paths),
+            )
             image_paths = plot_source_file(dataset, config, source_file, output_dir)
 
             stage = "verify_output"
@@ -460,7 +481,7 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
 
 def main() -> int:
     """解析命令行参数并运行批处理任务。"""
-    parser = argparse.ArgumentParser(description="Batch draw cloud-top products for one UTC init time.")
+    parser = argparse.ArgumentParser(description="Batch generate configured forecast products.")
     parser.add_argument("--input-time", required=True, help="UTC time in YYYYMMDDHHMMSS format.")
     parser.add_argument(
         "--redraw",

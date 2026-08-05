@@ -1,42 +1,52 @@
 {
   "source": {
-    "root_dir": "D:/meteo/data",
-    "directory_template": "{YYYY}/{YYYYMMDD}",
-    "file_pattern": "RY_*.grb.nc"
+    "root_dir": "D:/meteo/product",
+    "directory_template": "",
+    "file_pattern": "*.nc"
   },
   "batch": {
     "lookback_hours": 12
   },
   "output": {
     "root_dir": "D:/meteo/output",
-    "directory_template": "{YYYY}/{YYYYMMDD}"
+    "model_directory": "cpefs",
+    "filename_prefix": "output_CPEFS"
   },
   "state": {
     "directory": "state",
     "filename_template": "processed_{YYYYMMDD}.json",
     "retention_days": 30
   },
-  "filename": {
-    "prefix": "Z_NAFP_BETJ_RY",
-    "height_code": "1001",
-    "region_code": "d02"
+  "plot": {
+    "title_prefix": "CMA-CPEFS v2.0",
+    "footer": "CPAS",
+    "extent": [107.48, 123.5, 32.98, 47.02],
+    "latitude": "lat",
+    "longitude": "lon"
+  },
+  "boundaries": {
+    "province_file": "geojson/中国_省.geojson",
+    "city_file": "geojson/中国_市.geojson",
+    "tianjin_district_file": "geojson/天津市_县.geojson",
+    "country_linewidth": 2.1,
+    "province_linewidth": 2.1,
+    "city_linewidth": 0.55,
+    "district_linewidth": 0.55
   },
   "variables": [
     {
-      "source": "TMP_GDS3_CTL",
+      "source": "cloudtopt",
       "name": "cloudtopt",
-      "unit": "K",
-      "display_name": "Cloud Top Temperature",
+      "display_name": "云顶温度",
       "plot_unit": "°C",
-      "invalid_value": -500
+      "invalid_values": []
     },
     {
-      "source": "HGT_GDS3_CTL",
+      "source": "cloudtoph",
       "name": "cloudtoph",
-      "unit": "gpm",
-      "display_name": "Cloud Top Height",
+      "display_name": "云顶高度",
       "plot_unit": "km",
-      "invalid_value": -5000
+      "invalid_values": []
     }
   ]
 }
