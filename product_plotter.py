@@ -24,41 +24,67 @@ from shapely.ops import unary_union
 from dataload import CONFIG_FILE, load_config, read_data_from_file
 
 
-HEIGHT_LEVELS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16]
-HEIGHT_COLORS = [
-    "#b9afc6",
-    "#3876d2",
-    "#5ad073",
-    "#458e39",
-    "#66d800",
-    "#f2f51b",
-    "#c9a94e",
-    "#edb800",
-    "#ed2213",
-    "#f35349",
-    "#fbae9c",
-    "#af4f6b",
-    "#76287b",
-    "#b667c7",
-]
+COLOR_SCALE_COLORS = {
+    1: [
+        "#b9afc6",
+        "#3876d2",
+        "#5ad073",
+        "#458e39",
+        "#66d800",
+        "#f2f51b",
+        "#c9a94e",
+        "#edb800",
+        "#ed2213",
+        "#f35349",
+        "#fbae9c",
+        "#af4f6b",
+        "#76287b",
+        "#b667c7",
+    ],
+    2: [
+        "#b667c7",
+        "#76287b",
+        "#af4f6b",
+        "#fbae9c",
+        "#f35349",
+        "#ed2213",
+        "#edb800",
+        "#c9a94e",
+        "#f2f51b",
+        "#66d800",
+        "#458e39",
+        "#5ad073",
+        "#3876d2",
+        "#b9afc6",
+    ],
+    3: [
+        "#5176c5",
+        "#3ba3c2",
+        "#7ad3cb",
+        "#458e39",
+        "#66d800",
+        "#c6ef9d",
+        "#c9a94e",
+        "#f2f51b",
+        "#edb800",
+        "#ed2213",
+        "#f35349",
+        "#fbae9c",
+        "#a03084",
+        "#fe6fe3",
+    ],
+}
 
-TEMPERATURE_LEVELS = [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20]
-TEMPERATURE_COLORS = [
-    "#b667c7",
-    "#76287b",
-    "#af4f6b",
-    "#fbae9c",
-    "#f35349",
-    "#ed2213",
-    "#edb800",
-    "#c9a94e",
-    "#f2f51b",
-    "#66d800",
-    "#458e39",
-    "#5ad073",
-    "#3876d2",
-    "#b9afc6",
-]
+VARIABLE_LEVELS = {
+    "cband": [0.01, 0.1, 0.5, 1, 1.5, 2, 3, 4, 5, 8, 10, 20, 50, 80],
+    "vil": [0.01, 0.1, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 7.5],
+    "visl": [0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5],
+    "cloudtoph": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16],
+    "cloudtopt": [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20],
+    "cloudboth": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16],
+    "cloudbott": [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20],
+    "max_dbz": [-5, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65],
+}
 
 PROJECT_DIR = Path(__file__).resolve().parent
 COMPLETE_SIZE = (16.0, 14.5)
@@ -198,13 +224,25 @@ def prepare_values(data_array, variable_config: dict, levels: list[int | float])
     return np.ma.array(values, mask=invalid_mask)
 
 
-def get_color_config(variable_name: str) -> tuple[list[int | float], list[str]]:
-    """返回产品色标文档中规定的等级和颜色。"""
-    if variable_name == "cloudtoph":
-        return HEIGHT_LEVELS, HEIGHT_COLORS
-    if variable_name == "cloudtopt":
-        return TEMPERATURE_LEVELS, TEMPERATURE_COLORS
-    raise ValueError(f"No color settings configured for variable: {variable_name}")
+def get_color_config(variable_config: dict) -> tuple[list[int | float], list[str]]:
+    """根据要素名称和色标编号返回文档规定的等级与颜色。"""
+    variable_name = variable_config["name"]
+    color_scale = variable_config.get("color_scale")
+    if variable_name not in VARIABLE_LEVELS:
+        raise ValueError(f"No levels configured for variable: {variable_name}")
+    if color_scale not in COLOR_SCALE_COLORS:
+        raise ValueError(
+            f"Unsupported color scale {color_scale!r} for variable: {variable_name}"
+        )
+
+    levels = VARIABLE_LEVELS[variable_name]
+    colors = COLOR_SCALE_COLORS[color_scale]
+    if len(levels) > len(colors):
+        raise ValueError(
+            f"Variable {variable_name} has more levels than color scale {color_scale}"
+        )
+    # 文档中垂直累计液态水的最后一个阈值为空，因此只使用有数值的颜色列。
+    return levels, colors[:len(levels)]
 
 
 def build_data_color_settings(
@@ -713,7 +751,7 @@ def plot_one_variable(
 
     latitude = dataset[latitude_name].values
     longitude = dataset[longitude_name].values
-    levels, colors = get_color_config(variable_name)
+    levels, colors = get_color_config(variable_config)
     values = prepare_values(dataset[variable_name], variable_config, levels)
     cmap, norm = build_data_color_settings(levels, colors)
 

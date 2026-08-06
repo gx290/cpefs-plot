@@ -39,6 +39,7 @@
       "name": "cloudtopt",
       "display_name": "云顶温度",
       "plot_unit": "°C",
+      "color_scale": 2,
       "invalid_values": []
     },
     {
@@ -46,6 +47,55 @@
       "name": "cloudtoph",
       "display_name": "云顶高度",
       "plot_unit": "km",
+      "color_scale": 1,
+      "invalid_values": []
+    },
+    {
+      "source": "cband",
+      "name": "cband",
+      "display_name": "云带",
+      "plot_unit": "mm",
+      "color_scale": 1,
+      "invalid_values": []
+    },
+    {
+      "source": "vil",
+      "name": "vil",
+      "display_name": "垂直累计液态水",
+      "plot_unit": "mm",
+      "color_scale": 1,
+      "invalid_values": []
+    },
+    {
+      "source": "visl",
+      "name": "visl",
+      "display_name": "垂直累计过冷水",
+      "plot_unit": "mm",
+      "color_scale": 1,
+      "invalid_values": []
+    },
+    {
+      "source": "cloudboth",
+      "name": "cloudboth",
+      "display_name": "云底高度",
+      "plot_unit": "km",
+      "color_scale": 1,
+      "invalid_values": []
+    },
+    {
+      "source": "cloudbott",
+      "name": "cloudbott",
+      "display_name": "云底温度",
+      "plot_unit": "°C",
+      "color_scale": 2,
+      "invalid_values": []
+    },
+    {
+      "source": "max_dbz",
+      "name": "max_dbz",
+      "display_name": "垂直最大反射率",
+      "plot_unit": "dBZ",
+      "color_scale": 3,
       "invalid_values": []
     }
   ]
