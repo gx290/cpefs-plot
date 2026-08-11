@@ -4,7 +4,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from time import perf_counter
 
-from dataload import CONFIG_FILE, load_config, read_data_from_file
+from dataload import (
+    CONFIG_FILE,
+    get_variable_configs,
+    load_config,
+    read_product_data_from_file,
+)
 from product_plotter import (
     expected_image_paths,
     parse_product_filename,
@@ -328,7 +333,8 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
         output_root=output_root,
         output_structure=(
             f"{config['output']['model_directory']}/"
-            "{YYYYMMDDHH}/F{forecast_hour}/2d/{complete|simple}"
+            "{YYYYMMDDHH}/F{forecast_hour}/"
+            "{2d/{complete|simple}|3d/{pressure}hpa/{complete|simple}}"
         ),
         filename_prefix=config["output"].get("filename_prefix", ""),
         state_retention_days=config["state"]["retention_days"],
@@ -414,16 +420,24 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
 
             stage = "read_nc"
             log_event("READ", source=source_file.name, path=source_file)
-            dataset = read_data_from_file(source_file, config)
+            dataset_2d, dataset_3d = read_product_data_from_file(source_file, config)
 
             stage = "plot"
             log_event(
                 "PLOT",
                 source=source_file.name,
-                variables=len(config["variables"]),
+                variables_2d=len(get_variable_configs(config, "2D")),
+                variables_3d=len(get_variable_configs(config, "3D")),
+                pressure_levels=dataset_3d.sizes.get(config["plot"].get("level", ""), 0),
                 expected_images=len(expected_paths),
             )
-            image_paths = plot_source_file(dataset, config, source_file, output_dir)
+            image_paths = plot_source_file(
+                dataset_2d,
+                dataset_3d,
+                config,
+                source_file,
+                output_dir,
+            )
 
             stage = "verify_output"
             if not all(path.is_file() for path in image_paths):

@@ -21,7 +21,13 @@ from matplotlib.colors import BoundaryNorm, ListedColormap, Normalize
 from shapely.geometry import box, shape
 from shapely.ops import unary_union
 
-from dataload import CONFIG_FILE, load_config, read_data_from_file
+from dataload import (
+    CONFIG_FILE,
+    get_variable_configs,
+    load_config,
+    read_pressure_levels,
+    read_product_data_from_file,
+)
 
 
 COLOR_SCALE_COLORS = {
@@ -73,6 +79,38 @@ COLOR_SCALE_COLORS = {
         "#a03084",
         "#fe6fe3",
     ],
+    4: [
+        "#b9afc6",
+        "#3876d2",
+        "#5ad073",
+        "#458e39",
+        "#66d800",
+        "#f2f51b",
+        "#c9a94e",
+        "#edb800",
+        "#ed2213",
+        "#f35349",
+        "#fbae9c",
+        "#ef23a7",
+        "#fe6fe3",
+        "#d3cab6",
+    ],
+    5: [
+        "#ffffff",
+        "#b9afc6",
+        "#3876d2",
+        "#5ad073",
+        "#458e39",
+        "#66d800",
+        "#f2f51b",
+        "#c9a94e",
+        "#edb800",
+        "#ed2213",
+        "#f35349",
+        "#fbae9c",
+        "#af4f6b",
+        "#76287b",
+    ],
 }
 
 VARIABLE_LEVELS = {
@@ -85,6 +123,13 @@ VARIABLE_LEVELS = {
     "cloudbott": [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20],
     "max_dbz": [-5, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65],
 }
+
+VARIABLE_3D_LEVELS = {
+    "dbz": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70],
+    "qcloud": [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5],
+}
+TEMPERATURE_BOUNDARIES = [-50, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15]
+TEMPERATURE_LABELS = [str(value) for value in TEMPERATURE_BOUNDARIES]
 
 PROJECT_DIR = Path(__file__).resolve().parent
 COMPLETE_SIZE = (16.0, 14.5)
@@ -187,6 +232,10 @@ def normalize_unit(unit: str) -> str:
         "meter": "m",
         "kilometer": "km",
         "kilometre": "km",
+        "kgkg-1": "kg/kg",
+        "kgkg^-1": "kg/kg",
+        "gkg-1": "g/kg",
+        "gkg^-1": "g/kg",
     }
     return aliases.get(normalized, normalized)
 
@@ -204,10 +253,19 @@ def convert_values(values: np.ndarray, source_unit: str, target_unit: str) -> np
         return values / 1000.0
     if source == "km" and target in {"gpm", "m"}:
         return values * 1000.0
+    if source == "kg/kg" and target == "g/kg":
+        return values * 1000.0
+    if source == "g/kg" and target == "kg/kg":
+        return values / 1000.0
     raise ValueError(f"Unsupported unit conversion: {source_unit} -> {target_unit}")
 
 
-def prepare_values(data_array, variable_config: dict, levels: list[int | float]) -> np.ma.MaskedArray:
+def prepare_values(
+    data_array,
+    variable_config: dict,
+    levels: list[int | float],
+    mask_below_first_level: bool = True,
+) -> np.ma.MaskedArray:
     """处理 NaN、Inf、配置无效值和色标下限，并完成必要的单位转换。"""
     values = np.asarray(data_array.values, dtype=float)
     invalid_mask = ~np.isfinite(values)
@@ -220,7 +278,8 @@ def prepare_values(data_array, variable_config: dict, levels: list[int | float])
 
     values = convert_values(values, source_unit, variable_config["plot_unit"])
     invalid_mask |= ~np.isfinite(values)
-    invalid_mask |= values < levels[0]
+    if mask_below_first_level:
+        invalid_mask |= values < levels[0]
     return np.ma.array(values, mask=invalid_mask)
 
 
@@ -245,6 +304,34 @@ def get_color_config(variable_config: dict) -> tuple[list[int | float], list[str
     return levels, colors[:len(levels)]
 
 
+def get_3d_color_config(
+    variable_config: dict,
+) -> tuple[list[int | float], list[str], list[str], bool]:
+    """返回三维要素的分级值、颜色、色标标签和低值掩膜方式。"""
+    variable_name = variable_config["name"]
+    color_scale = variable_config.get("color_scale")
+    if color_scale not in COLOR_SCALE_COLORS:
+        raise ValueError(
+            f"Unsupported color scale {color_scale!r} for variable: {variable_name}"
+        )
+
+    colors = COLOR_SCALE_COLORS[color_scale]
+    if variable_name.lower() == "tc":
+        if len(colors) != len(TEMPERATURE_BOUNDARIES) + 1:
+            raise ValueError("Temperature color scale must contain 14 colors")
+        return TEMPERATURE_BOUNDARIES, colors, TEMPERATURE_LABELS, False
+
+    normalized_name = variable_name.lower()
+    if normalized_name not in VARIABLE_3D_LEVELS:
+        raise ValueError(f"No 3-D levels configured for variable: {variable_name}")
+    levels = VARIABLE_3D_LEVELS[normalized_name]
+    if len(levels) != len(colors):
+        raise ValueError(
+            f"3-D variable {variable_name} must have one color for every level"
+        )
+    return levels, colors, [str(value) for value in levels], True
+
+
 def build_data_color_settings(
     levels: list[int | float],
     colors: list[str],
@@ -255,6 +342,21 @@ def build_data_color_settings(
     cmap = ListedColormap(colors)
     cmap.set_bad((0, 0, 0, 0))
     norm = BoundaryNorm(boundaries, cmap.N, clip=True)
+    return cmap, norm
+
+
+def build_interval_color_settings(
+    boundaries: list[int | float],
+    colors: list[str],
+) -> tuple[ListedColormap, BoundaryNorm]:
+    """为温度这种包含低于首界限和高于末界限的区间色标创建映射。"""
+    outer_limit = 1e10
+    data_boundaries = list(boundaries)
+    # 文档首档为“≤-50”，将首边界向上移动一个浮点步长以包含恰好 -50。
+    data_boundaries[0] = np.nextafter(data_boundaries[0], np.inf)
+    cmap = ListedColormap(colors)
+    cmap.set_bad((0, 0, 0, 0))
+    norm = BoundaryNorm([-outer_limit, *data_boundaries, outer_limit], cmap.N, clip=True)
     return cmap, norm
 
 
@@ -513,24 +615,32 @@ def add_tianjin_district_labels(ax, config: dict, extent: list[float]) -> None:
 def draw_discrete_colorbar(
     fig,
     variable_config: dict,
-    levels: list[int | float],
+    labels: list[str],
     colors: list[str],
 ) -> None:
     """在完整图左下方绘制等高色块式图例。"""
     colorbar_axis = fig.add_axes([0.026, 0.115, 0.023, 0.365])
     category_boundaries = np.arange(len(colors) + 1)
-    category_centers = np.arange(len(colors)) + 0.5
+    if len(labels) == len(colors):
+        tick_positions = np.arange(len(colors)) + 0.5
+    elif len(labels) == len(colors) - 1:
+        # 温度色标只在相邻颜色的分界处显示温度值，不显示区间文字。
+        tick_positions = np.arange(1, len(colors))
+    else:
+        raise ValueError(
+            "Colorbar labels must match either all color blocks or their boundaries"
+        )
     colorbar = ColorbarBase(
         colorbar_axis,
         cmap=ListedColormap(colors),
         norm=Normalize(0, len(colors)),
         boundaries=category_boundaries,
-        ticks=category_centers,
+        ticks=tick_positions,
         spacing="uniform",
         orientation="vertical",
         drawedges=True,
     )
-    colorbar.ax.set_yticklabels([str(value) for value in levels])
+    colorbar.ax.set_yticklabels(labels)
     colorbar.ax.tick_params(length=0, labelsize=10, pad=8)
     colorbar.outline.set_linewidth(0.8)
     colorbar.dividers.set_linewidth(0.5)
@@ -589,11 +699,62 @@ def build_image_path(
     )
 
 
+def format_pressure_level(level: int | float) -> str:
+    """将气压层格式化为目录名使用的简洁数字。"""
+    level_value = float(level)
+    if level_value.is_integer():
+        return str(int(level_value))
+    return f"{level_value:g}"
+
+
+def build_3d_image_name(
+    config: dict,
+    metadata: ProductMetadata,
+    variable_name: str,
+    complete: bool,
+) -> str:
+    """按照三维产品规范生成文件名。"""
+    prefix = config["output"].get("filename_prefix", "").strip("_")
+    parts = [
+        part
+        for part in (
+            prefix,
+            metadata.init_time.strftime("%Y%m%d%H"),
+            f"F{metadata.forecast_text}",
+            variable_name,
+            "3D",
+        )
+        if part
+    ]
+    if complete:
+        parts.append("COMPLETE")
+    return "_".join(parts) + ".png"
+
+
+def build_3d_image_path(
+    config: dict,
+    output_dir: Path,
+    metadata: ProductMetadata,
+    variable_name: str,
+    pressure_level: int | float,
+    complete: bool,
+) -> Path:
+    """返回指定气压层 complete 或 simple 子目录中的三维图片路径。"""
+    variant_directory = "complete" if complete else "simple"
+    return (
+        output_dir
+        / "3d"
+        / f"{format_pressure_level(pressure_level)}hpa"
+        / variant_directory
+        / build_3d_image_name(config, metadata, variable_name, complete)
+    )
+
+
 def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path) -> list[Path]:
     """返回一个 NC 文件按当前配置应该生成的全部 PNG。"""
     metadata = parse_product_filename(source_file)
     paths = []
-    for variable_config in config["variables"]:
+    for variable_config in get_variable_configs(config, "2D"):
         for complete in (True, False):
             paths.append(
                 build_image_path(
@@ -604,6 +765,19 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
                     complete,
                 )
             )
+    for pressure_level in read_pressure_levels(source_file, config):
+        for variable_config in get_variable_configs(config, "3D"):
+            for complete in (True, False):
+                paths.append(
+                    build_3d_image_path(
+                        config,
+                        output_dir,
+                        metadata,
+                        variable_config["name"],
+                        pressure_level,
+                        complete,
+                    )
+                )
     return paths
 
 
@@ -613,12 +787,13 @@ def draw_complete_image(
     values: np.ma.MaskedArray,
     cmap: ListedColormap,
     norm: BoundaryNorm,
-    levels: list[int | float],
+    colorbar_labels: list[str],
     colors: list[str],
     variable_config: dict,
     metadata: ProductMetadata,
     config: dict,
     output_file: Path,
+    pressure_level: int | float | None = None,
 ) -> None:
     """绘制包含地图、中文行政区名称、标题和色标的完整产品。"""
     extent = config["plot"]["extent"]
@@ -650,9 +825,14 @@ def draw_complete_image(
         spine.set_linewidth(3.0)
         spine.set_edgecolor("#111516")
 
+    pressure_text = (
+        f"  {format_pressure_level(pressure_level)} hPa"
+        if pressure_level is not None
+        else ""
+    )
     title = (
-        f"{config['plot']['title_prefix']}  {variable_config['display_name']}  "
-        f"{metadata.valid_time:%Y年%m月%d日%H时}"
+        f"{config['plot']['title_prefix']}  {variable_config['display_name']}"
+        f"{pressure_text}  {metadata.valid_time:%Y年%m月%d日%H时}"
     )
     figure.text(
         0.055,
@@ -696,7 +876,7 @@ def draw_complete_image(
         ha="left",
         va="bottom",
     )
-    draw_discrete_colorbar(figure, variable_config, levels, colors)
+    draw_discrete_colorbar(figure, variable_config, colorbar_labels, colors)
 
     output_file.parent.mkdir(parents=True, exist_ok=True)
     figure.savefig(output_file, dpi=IMAGE_DPI, facecolor=FIGURE_BACKGROUND)
@@ -775,7 +955,7 @@ def plot_one_variable(
         values,
         cmap,
         norm,
-        levels,
+        [str(value) for value in levels],
         colors,
         variable_config,
         metadata,
@@ -794,25 +974,127 @@ def plot_one_variable(
     return [complete_file, simple_file]
 
 
-def plot_source_file(
+def plot_one_3d_level(
     dataset,
+    config: dict,
+    variable_config: dict,
+    metadata: ProductMetadata,
+    pressure_level: int | float,
+    output_dir: Path,
+) -> list[Path]:
+    """为一个三维要素的一个气压层分别绘制完整图和透明图。"""
+    plot_config = config["plot"]
+    latitude = dataset[plot_config["latitude"]].values
+    longitude = dataset[plot_config["longitude"]].values
+    variable_name = variable_config["name"]
+    level_name = plot_config["level"]
+    level_data = dataset[variable_name].sel({level_name: pressure_level})
+
+    levels, colors, colorbar_labels, mask_below = get_3d_color_config(variable_config)
+    values = prepare_values(
+        level_data,
+        variable_config,
+        levels,
+        mask_below_first_level=mask_below,
+    )
+    if variable_name.lower() == "tc":
+        cmap, norm = build_interval_color_settings(levels, colors)
+    else:
+        cmap, norm = build_data_color_settings(levels, colors)
+
+    complete_file = build_3d_image_path(
+        config,
+        output_dir,
+        metadata,
+        variable_name,
+        pressure_level,
+        complete=True,
+    )
+    simple_file = build_3d_image_path(
+        config,
+        output_dir,
+        metadata,
+        variable_name,
+        pressure_level,
+        complete=False,
+    )
+    draw_complete_image(
+        latitude,
+        longitude,
+        values,
+        cmap,
+        norm,
+        colorbar_labels,
+        colors,
+        variable_config,
+        metadata,
+        config,
+        complete_file,
+        pressure_level=pressure_level,
+    )
+    draw_simple_image(
+        latitude,
+        longitude,
+        values,
+        cmap,
+        norm,
+        plot_config["extent"],
+        simple_file,
+    )
+    return [complete_file, simple_file]
+
+
+def plot_3d_variables(
+    dataset,
+    config: dict,
+    metadata: ProductMetadata,
+    output_dir: Path,
+) -> list[Path]:
+    """逐气压层绘制配置中的全部三维要素。"""
+    variable_configs = get_variable_configs(config, "3D")
+    if not variable_configs:
+        return []
+
+    level_name = config["plot"]["level"]
+    pressure_levels = dataset[level_name].values
+    image_files = []
+    for pressure_level in pressure_levels:
+        level_value = float(pressure_level)
+        for variable_config in variable_configs:
+            image_files.extend(
+                plot_one_3d_level(
+                    dataset,
+                    config,
+                    variable_config,
+                    metadata,
+                    level_value,
+                    output_dir,
+                )
+            )
+    return image_files
+
+
+def plot_source_file(
+    dataset_2d,
+    dataset_3d,
     config: dict,
     source_file: str | Path,
     output_dir: Path,
 ) -> list[Path]:
-    """绘制一个源文件中配置的全部二维要素。"""
+    """绘制一个源文件中配置的全部二维要素和逐层三维要素。"""
     metadata = parse_product_filename(source_file)
     image_files = []
-    for variable_config in config["variables"]:
+    for variable_config in get_variable_configs(config, "2D"):
         image_files.extend(
             plot_one_variable(
-                dataset,
+                dataset_2d,
                 config,
                 variable_config,
                 metadata,
                 output_dir,
             )
         )
+    image_files.extend(plot_3d_variables(dataset_3d, config, metadata, output_dir))
     return image_files
 
 
@@ -847,8 +1129,14 @@ def main() -> None:
         if args.output_dir
         else resolve_default_output_directory(config, args.data_file)
     )
-    parsed_dataset = read_data_from_file(args.data_file, config)
-    image_files = plot_source_file(parsed_dataset, config, args.data_file, output_dir)
+    dataset_2d, dataset_3d = read_product_data_from_file(args.data_file, config)
+    image_files = plot_source_file(
+        dataset_2d,
+        dataset_3d,
+        config,
+        args.data_file,
+        output_dir,
+    )
     for image_file in image_files:
         print(f"Saved image to: {image_file}")
 

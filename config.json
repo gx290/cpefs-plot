@@ -22,7 +22,8 @@
     "footer": "CPAS",
     "extent": [107.48, 123.5, 32.98, 47.02],
     "latitude": "lat",
-    "longitude": "lon"
+    "longitude": "lon",
+    "level": "level"
   },
   "boundaries": {
     "province_file": "geojson/中国_省.geojson",
@@ -37,6 +38,7 @@
     {
       "source": "cloudtopt",
       "name": "cloudtopt",
+      "dimension": "2D",
       "display_name": "云顶温度",
       "plot_unit": "°C",
       "color_scale": 2,
@@ -45,6 +47,7 @@
     {
       "source": "cloudtoph",
       "name": "cloudtoph",
+      "dimension": "2D",
       "display_name": "云顶高度",
       "plot_unit": "km",
       "color_scale": 1,
@@ -53,6 +56,7 @@
     {
       "source": "cband",
       "name": "cband",
+      "dimension": "2D",
       "display_name": "云带",
       "plot_unit": "mm",
       "color_scale": 1,
@@ -61,6 +65,7 @@
     {
       "source": "vil",
       "name": "vil",
+      "dimension": "2D",
       "display_name": "垂直累计液态水",
       "plot_unit": "mm",
       "color_scale": 1,
@@ -69,6 +74,7 @@
     {
       "source": "visl",
       "name": "visl",
+      "dimension": "2D",
       "display_name": "垂直累计过冷水",
       "plot_unit": "mm",
       "color_scale": 1,
@@ -77,6 +83,7 @@
     {
       "source": "cloudboth",
       "name": "cloudboth",
+      "dimension": "2D",
       "display_name": "云底高度",
       "plot_unit": "km",
       "color_scale": 1,
@@ -85,6 +92,7 @@
     {
       "source": "cloudbott",
       "name": "cloudbott",
+      "dimension": "2D",
       "display_name": "云底温度",
       "plot_unit": "°C",
       "color_scale": 2,
@@ -93,9 +101,37 @@
     {
       "source": "max_dbz",
       "name": "max_dbz",
+      "dimension": "2D",
       "display_name": "垂直最大反射率",
       "plot_unit": "dBZ",
       "color_scale": 3,
+      "invalid_values": []
+    },
+    {
+      "source": "Tc",
+      "name": "Tc",
+      "dimension": "3D",
+      "display_name": "温度",
+      "plot_unit": "°C",
+      "color_scale": 5,
+      "invalid_values": []
+    },
+    {
+      "source": "dbz",
+      "name": "dbz",
+      "dimension": "3D",
+      "display_name": "雷达反射率",
+      "plot_unit": "dBZ",
+      "color_scale": 3,
+      "invalid_values": []
+    },
+    {
+      "source": "qcloud",
+      "name": "qcloud",
+      "dimension": "3D",
+      "display_name": "云水混合比",
+      "plot_unit": "g/kg",
+      "color_scale": 4,
       "invalid_values": []
     }
   ]
