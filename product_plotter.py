@@ -1,13 +1,13 @@
 """绘制 KeyMete 配置要素的完整图和透明图。"""
 
 import argparse
-import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
 import cartopy.crs as ccrs
+import cartopy.io.shapereader as shpreader
 import matplotlib
 
 matplotlib.use("Agg")
@@ -18,8 +18,7 @@ import numpy as np
 from matplotlib import font_manager
 from matplotlib.colorbar import ColorbarBase
 from matplotlib.colors import BoundaryNorm, ListedColormap, Normalize
-from shapely.geometry import box, shape
-from shapely.ops import unary_union
+from shapely.geometry import box
 
 from dataload import (
     CONFIG_FILE,
@@ -132,20 +131,12 @@ TEMPERATURE_BOUNDARIES = [-50, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 
 TEMPERATURE_LABELS = [str(value) for value in TEMPERATURE_BOUNDARIES]
 
 PROJECT_DIR = Path(__file__).resolve().parent
-COMPLETE_SIZE = (16.0, 14.5)
+COMPLETE_SIZE = (12.0, 10.0)
 SIMPLE_SIZE = (14.1, 11.7)
 IMAGE_DPI = 100
-MAP_BACKGROUND = "#dcebf1"
-FIGURE_BACKGROUND = "#eef4f7"
+MAP_BACKGROUND = "#ffffff"
+FIGURE_BACKGROUND = "#ffffff"
 SIMPLE_ALPHA = 0.9
-TIANJIN_URBAN_DISTRICTS = {
-    "和平区",
-    "河东区",
-    "河西区",
-    "南开区",
-    "河北区",
-    "红桥区",
-}
 
 @dataclass(frozen=True)
 class ProductMetadata:
@@ -381,34 +372,19 @@ def resolve_boundary_path(file_name: str) -> Path:
 
 
 @lru_cache(maxsize=None)
-def load_geojson_records(file_name: str) -> tuple[tuple[dict, object], ...]:
-    """读取并缓存 GeoJSON 中具有行政区面的属性和几何对象。"""
+def load_shapefile_records(file_name: str) -> tuple[tuple[dict, object], ...]:
+    """读取并缓存 Shapefile 中的行政区属性和几何对象。"""
     boundary_file = resolve_boundary_path(file_name)
     if not boundary_file.is_file():
         raise FileNotFoundError(f"Boundary file does not exist: {boundary_file}")
 
-    with boundary_file.open("r", encoding="utf-8") as file:
-        geojson = json.load(file)
-
     records = []
-    for feature in geojson.get("features", []):
-        geometry_data = feature.get("geometry")
-        if geometry_data is None:
+    for record in shpreader.Reader(boundary_file).records():
+        geometry = record.geometry
+        if geometry is None or geometry.is_empty:
             continue
-        geometry = shape(geometry_data)
-        # 省、市文件还包含“境界线”，这里只使用行政区面，避免重复描边。
-        if geometry.is_empty or geometry.geom_type not in {"Polygon", "MultiPolygon"}:
-            continue
-        records.append((dict(feature.get("properties") or {}), geometry))
+        records.append((dict(record.attributes), geometry))
     return tuple(records)
-
-
-@lru_cache(maxsize=None)
-def load_country_outline(file_name: str):
-    """合并全部省级面，得到不包含省内边界的中国外轮廓。"""
-    return unary_union(
-        [geometry for _, geometry in load_geojson_records(file_name)]
-    )
 
 
 def records_in_extent(
@@ -425,16 +401,16 @@ def records_in_extent(
     ]
 
 
-def add_geojson_layer(
+def add_shapefile_layer(
     ax,
     file_name: str,
     extent: list[float],
     predicate=None,
     **style,
 ) -> None:
-    """把筛选后的本地 GeoJSON 行政区面叠加到地图上。"""
+    """把筛选后的本地 Shapefile 行政区几何叠加到地图上。"""
     records = records_in_extent(
-        load_geojson_records(file_name),
+        load_shapefile_records(file_name),
         extent,
         predicate,
     )
@@ -445,97 +421,78 @@ def add_geojson_layer(
             **style,
         )
 
-def draw_grid_and_inner_labels(ax, extent: list[float]) -> None:
-    """每隔2度绘制直角经纬线，并把标注放在图框内部。"""
-    lon_min, lon_max, lat_min, lat_max = extent
-    longitude_ticks = np.arange(np.ceil(lon_min / 2) * 2, lon_max + 0.001, 2)
-    latitude_ticks = np.arange(np.ceil(lat_min / 2) * 2, lat_max + 0.001, 2)
-
-    for longitude in longitude_ticks:
-        ax.axvline(longitude, color="#77858b", linewidth=0.55, alpha=0.75, zorder=3)
-        ax.text(
-            longitude + 0.07,
-            lat_min + 0.10,
-            f"{int(longitude)}°E",
-            fontsize=8,
-            color="#566168",
-            ha="left",
-            va="bottom",
-            fontfamily=CHINESE_FONT,
-            zorder=8,
-            clip_on=True,
-        )
-
-    for latitude in latitude_ticks:
-        ax.axhline(latitude, color="#77858b", linewidth=0.55, alpha=0.75, zorder=3)
-        ax.text(
-            lon_min + 0.07,
-            latitude - 0.08,
-            f"{int(latitude)}°N",
-            fontsize=8,
-            color="#566168",
-            ha="left",
-            va="top",
-            fontfamily=CHINESE_FONT,
-            zorder=8,
-            clip_on=True,
-        )
-
 
 def add_map_boundaries(ax, config: dict, extent: list[float]) -> None:
-    """使用天地图 GeoJSON 绘制国界、省界、市界和天津区界。"""
+    """使用 GADM Shapefile 绘制国界、省界、市界和直辖市区界。"""
     boundary_config = config["boundaries"]
-    ax.add_geometries(
-        [load_country_outline(boundary_config["province_file"])],
-        ccrs.PlateCarree(),
-        linewidth=boundary_config["country_linewidth"],
-        edgecolor="#15191b",
+    add_shapefile_layer(
+        ax,
+        boundary_config["city_file"],
+        extent,
+        linewidth=boundary_config["city_linewidth"],
+        edgecolor="#c3c3c3",
         facecolor="none",
-        zorder=6,
+        zorder=5.8,
     )
-    add_geojson_layer(
+    add_shapefile_layer(
+        ax,
+        boundary_config["district_file"],
+        extent,
+        predicate=lambda attributes: attributes.get("NAME_1") in {"Beijing", "Tianjin"},
+        linewidth=boundary_config["district_linewidth"],
+        edgecolor="#b8b8b8",
+        facecolor="none",
+        zorder=5.9,
+    )
+    add_shapefile_layer(
         ax,
         boundary_config["province_file"],
         extent,
         linewidth=boundary_config["province_linewidth"],
-        edgecolor="#15191b",
-        facecolor="none",
-        zorder=6.1,
-    )
-    add_geojson_layer(
-        ax,
-        boundary_config["city_file"],
-        extent,
-        predicate=lambda attributes: str(attributes.get("gb")) != "156120000",
-        linewidth=boundary_config["city_linewidth"],
-        edgecolor="#4e5559",
+        edgecolor="#111111",
         facecolor="none",
         zorder=6.2,
     )
-    add_geojson_layer(
+    add_shapefile_layer(
         ax,
-        boundary_config["tianjin_district_file"],
+        boundary_config["country_file"],
         extent,
-        linewidth=boundary_config["district_linewidth"],
-        edgecolor="#4e5559",
+        linewidth=boundary_config["country_linewidth"],
+        edgecolor="#111111",
         facecolor="none",
-        zorder=6.3,
+        zorder=6.4,
     )
 
 
+def get_chinese_province_name(attributes: dict) -> str:
+    """从 GADM 属性中提取简体中文省级名称并补充行政区后缀。"""
+    native_name = str(attributes.get("NL_NAME_1") or "").strip()
+    candidates = [item.strip() for item in native_name.split("|") if item.strip()]
+    if not candidates:
+        return ""
+
+    name = candidates[-1]
+    english_name = str(attributes.get("NAME_1") or "")
+    if english_name in {"Beijing", "Tianjin", "Shanghai", "Chongqing"}:
+        return name if name.endswith("市") else f"{name}市"
+    if name.endswith(("省", "自治区", "特别行政区")):
+        return name
+    return f"{name}省"
+
+
 def add_china_province_labels(ax, config: dict, extent: list[float]) -> None:
-    """根据省级 GeoJSON 的 name 字段标注省级行政区名称。"""
+    """根据 GADM 的中文属性标注省、自治区和直辖市名称。"""
     view_box = box(extent[0], extent[2], extent[1], extent[3])
     offsets = {
-        "北京市": (-0.35, 0.30),
-        "天津市": (0.25, -0.20),
-        "河北省": (-0.15, -0.15),
+        "北京市": (-0.20, 0.18),
+        "天津市": (0.28, -0.10),
+        "河北省": (-0.18, -0.08),
     }
-    for attributes, geometry in load_geojson_records(
+    for attributes, geometry in load_shapefile_records(
         config["boundaries"]["province_file"]
     ):
-        name = str(attributes.get("name") or "").strip()
-        if not name or name == "天津市":
+        name = get_chinese_province_name(attributes)
+        if not name:
             continue
         visible_geometry = geometry.intersection(view_box)
         if visible_geometry.is_empty:
@@ -548,10 +505,10 @@ def add_china_province_labels(ax, config: dict, extent: list[float]) -> None:
             label_point.y + offset_lat,
             name,
             transform=ccrs.PlateCarree(),
-            fontsize=15,
+            fontsize=12,
             fontweight="bold",
             fontfamily=CHINESE_FONT,
-            color="#52585c",
+            color="#7c7c7c",
             ha="center",
             va="center",
             zorder=8,
@@ -559,54 +516,7 @@ def add_china_province_labels(ax, config: dict, extent: list[float]) -> None:
         )
         text.set_path_effects(
             [
-                path_effects.Stroke(linewidth=4.0, foreground="white", alpha=0.9),
-                path_effects.Normal(),
-            ]
-        )
-
-
-def add_tianjin_district_labels(ax, config: dict, extent: list[float]) -> None:
-    """标注天津外围各区，并将中心六区合并标注为天津市区。"""
-    view_box = box(extent[0], extent[2], extent[1], extent[3])
-    boundary_config = config["boundaries"]
-    labels = []
-    urban_geometries = []
-    for attributes, geometry in load_geojson_records(
-        boundary_config["tianjin_district_file"],
-    ):
-        visible_geometry = geometry.intersection(view_box)
-        if visible_geometry.is_empty:
-            continue
-
-        name = str(attributes.get("name") or "").strip()
-        if not name:
-            continue
-        if name in TIANJIN_URBAN_DISTRICTS:
-            urban_geometries.append(visible_geometry)
-        else:
-            labels.append((name, visible_geometry))
-
-    if urban_geometries:
-        labels.append(("天津市区", unary_union(urban_geometries)))
-
-    for name, geometry in labels:
-        label_point = geometry.representative_point()
-        text = ax.text(
-            label_point.x,
-            label_point.y,
-            name,
-            transform=ccrs.PlateCarree(),
-            fontsize=9 if name == "天津市区" else 6.5,
-            fontfamily=CHINESE_FONT,
-            color="#30373b",
-            ha="center",
-            va="center",
-            zorder=8.2,
-            clip_on=True,
-        )
-        text.set_path_effects(
-            [
-                path_effects.Stroke(linewidth=2.0, foreground="white", alpha=0.95),
+                path_effects.Stroke(linewidth=2.5, foreground="white", alpha=0.92),
                 path_effects.Normal(),
             ]
         )
@@ -618,8 +528,17 @@ def draw_discrete_colorbar(
     labels: list[str],
     colors: list[str],
 ) -> None:
-    """在完整图左下方绘制等高色块式图例。"""
-    colorbar_axis = fig.add_axes([0.026, 0.115, 0.023, 0.365])
+    """按样例图4在地图左下角绘制紧凑的离散色标。"""
+    legend_background = fig.add_axes([0.063, 0.047, 0.074, 0.235], zorder=9)
+    legend_background.set_facecolor("white")
+    legend_background.set_xticks([])
+    legend_background.set_yticks([])
+    for spine in legend_background.spines.values():
+        spine.set_color("#aaaaaa")
+        spine.set_linewidth(0.8)
+
+    colorbar_axis = fig.add_axes([0.069, 0.055, 0.018, 0.205])
+    colorbar_axis.set_zorder(10)
     category_boundaries = np.arange(len(colors) + 1)
     if len(labels) == len(colors):
         tick_positions = np.arange(len(colors)) + 0.5
@@ -641,20 +560,20 @@ def draw_discrete_colorbar(
         drawedges=True,
     )
     colorbar.ax.set_yticklabels(labels)
-    colorbar.ax.tick_params(length=0, labelsize=10, pad=8)
+    colorbar.ax.tick_params(length=0, labelsize=8, pad=4)
     colorbar.outline.set_linewidth(0.8)
     colorbar.dividers.set_linewidth(0.5)
 
     fig.text(
-        0.026,
-        0.493,
-        f"{variable_config['name'].upper()}\n({variable_config['plot_unit']})",
-        fontsize=13,
-        fontweight="bold",
+        0.069,
+        0.267,
+        f"({variable_config['plot_unit']})",
+        fontsize=9,
         fontfamily=CHINESE_FONT,
-        color="#30363a",
+        color="#222222",
         ha="left",
         va="bottom",
+        zorder=11,
     )
 
 
@@ -795,10 +714,10 @@ def draw_complete_image(
     output_file: Path,
     pressure_level: int | float | None = None,
 ) -> None:
-    """绘制包含地图、中文行政区名称、标题和色标的完整产品。"""
+    """按照样例图4绘制白底、顶部标题和内嵌色标的完整产品。"""
     extent = config["plot"]["extent"]
     figure = plt.figure(figsize=COMPLETE_SIZE, dpi=IMAGE_DPI, facecolor=FIGURE_BACKGROUND)
-    axis = figure.add_axes([0.09, 0.087, 0.881, 0.807], projection=ccrs.PlateCarree())
+    axis = figure.add_axes([0.06, 0.04, 0.87, 0.91], projection=ccrs.PlateCarree())
     axis.set_extent(extent, crs=ccrs.PlateCarree())
     axis.set_aspect("auto")
     axis.set_facecolor(MAP_BACKGROUND)
@@ -816,14 +735,12 @@ def draw_complete_image(
         antialiased=False,
         zorder=2,
     )
-    draw_grid_and_inner_labels(axis, extent)
     add_map_boundaries(axis, config, extent)
     add_china_province_labels(axis, config, extent)
-    add_tianjin_district_labels(axis, config, extent)
 
     for spine in axis.spines.values():
-        spine.set_linewidth(3.0)
-        spine.set_edgecolor("#111516")
+        spine.set_linewidth(2.0)
+        spine.set_edgecolor("#111111")
 
     pressure_text = (
         f"  {format_pressure_level(pressure_level)} hPa"
@@ -831,14 +748,14 @@ def draw_complete_image(
         else ""
     )
     title = (
-        f"{config['plot']['title_prefix']}  {variable_config['display_name']}"
-        f"{pressure_text}  {metadata.valid_time:%Y年%m月%d日%H时}"
+        f"{config['plot']['title_prefix']} {variable_config['display_name']}"
+        f"{pressure_text} {metadata.valid_time:%Y年%m月%d日%H时}"
     )
     figure.text(
-        0.055,
-        0.965,
+        0.06,
+        0.98,
         title,
-        fontsize=26,
+        fontsize=18,
         fontweight="bold",
         fontfamily=CHINESE_FONT,
         color="#202427",
@@ -846,35 +763,14 @@ def draw_complete_image(
         va="top",
     )
     figure.text(
-        0.86,
-        0.965,
-        "(UTC)",
-        fontsize=14,
+        0.93,
+        0.978,
+        f"(UTC) {metadata.init_time:%Y%m%d%H} F{metadata.forecast_hour:03d}",
+        fontsize=12,
         fontfamily=CHINESE_FONT,
-        color="#30363a",
-        ha="center",
+        color="#222222",
+        ha="right",
         va="top",
-    )
-    figure.text(
-        0.875,
-        0.94,
-        f"{metadata.init_time:%Y%m%d%H}  F{metadata.forecast_hour}",
-        fontsize=14,
-        fontfamily=CHINESE_FONT,
-        color="#30363a",
-        ha="center",
-        va="top",
-    )
-    figure.text(
-        0.022,
-        0.045,
-        config["plot"].get("footer", ""),
-        fontsize=17,
-        fontweight="bold",
-        fontfamily=CHINESE_FONT,
-        color="#30363a",
-        ha="left",
-        va="bottom",
     )
     draw_discrete_colorbar(figure, variable_config, colorbar_labels, colors)
 
