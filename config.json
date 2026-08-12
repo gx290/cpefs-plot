@@ -129,8 +129,80 @@
       "source": "qcloud",
       "name": "qcloud",
       "dimension": "3D",
-      "display_name": "云水混合比",
+      "display_name": "云水比含水量",
       "plot_unit": "g/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qrain",
+      "name": "qrain",
+      "dimension": "3D",
+      "display_name": "雨水比含水量",
+      "plot_unit": "g/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qice",
+      "name": "qice",
+      "dimension": "3D",
+      "display_name": "冰晶比含水量",
+      "plot_unit": "g/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qsnow",
+      "name": "qsnow",
+      "dimension": "3D",
+      "display_name": "雪比含水量",
+      "plot_unit": "g/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qgraup",
+      "name": "qgraup",
+      "dimension": "3D",
+      "display_name": "霰比含水量",
+      "plot_unit": "g/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qnrain",
+      "name": "qnrain",
+      "dimension": "3D",
+      "display_name": "雨滴数浓度",
+      "plot_unit": "1/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qnice",
+      "name": "qnice",
+      "dimension": "3D",
+      "display_name": "冰晶数浓度",
+      "plot_unit": "1/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qnsnow",
+      "name": "qnsnow",
+      "dimension": "3D",
+      "display_name": "雪数浓度",
+      "plot_unit": "1/kg",
+      "color_scale": 4,
+      "invalid_values": []
+    },
+    {
+      "source": "qngraupel",
+      "name": "qngraupel",
+      "dimension": "3D",
+      "display_name": "霰数浓度",
+      "plot_unit": "1/kg",
       "color_scale": 4,
       "invalid_values": []
     }
