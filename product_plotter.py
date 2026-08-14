@@ -712,7 +712,8 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
     metadata = parse_product_filename(source_file)
     paths = []
     for variable_config in get_variable_configs(config, "2D"):
-        for complete in (True, False):
+        # 完整底图暂时关闭，恢复时将 True 加回变体列表。
+        for complete in (False,):
             paths.append(
                 build_image_path(
                     config,
@@ -724,7 +725,8 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
             )
     for pressure_level in read_pressure_levels(source_file, config):
         for variable_config in get_variable_configs(config, "3D"):
-            for complete in (True, False):
+            # 完整底图暂时关闭，恢复时将 True 加回变体列表。
+            for complete in (False,):
                 paths.append(
                     build_3d_image_path(
                         config,
@@ -883,19 +885,19 @@ def plot_one_variable(
         variable_config,
         complete=False,
     )
-    draw_complete_image(
-        latitude,
-        longitude,
-        values,
-        cmap,
-        norm,
-        [str(value) for value in levels],
-        colors,
-        variable_config,
-        metadata,
-        config,
-        complete_file,
-    )
+    # draw_complete_image(
+    #     latitude,
+    #     longitude,
+    #     values,
+    #     cmap,
+    #     norm,
+    #     [str(value) for value in levels],
+    #     colors,
+    #     variable_config,
+    #     metadata,
+    #     config,
+    #     complete_file,
+    # )
     draw_simple_image(
         latitude,
         longitude,
@@ -905,7 +907,7 @@ def plot_one_variable(
         config["plot"]["extent"],
         simple_file,
     )
-    return [complete_file, simple_file]
+    return [simple_file]
 
 
 def plot_one_3d_level(
@@ -952,20 +954,20 @@ def plot_one_3d_level(
         pressure_level,
         complete=False,
     )
-    draw_complete_image(
-        latitude,
-        longitude,
-        values,
-        cmap,
-        norm,
-        colorbar_labels,
-        colors,
-        variable_config,
-        metadata,
-        config,
-        complete_file,
-        pressure_level=pressure_level,
-    )
+    # draw_complete_image(
+    #     latitude,
+    #     longitude,
+    #     values,
+    #     cmap,
+    #     norm,
+    #     colorbar_labels,
+    #     colors,
+    #     variable_config,
+    #     metadata,
+    #     config,
+    #     complete_file,
+    #     pressure_level=pressure_level,
+    # )
     draw_simple_image(
         latitude,
         longitude,
@@ -975,7 +977,7 @@ def plot_one_3d_level(
         plot_config["extent"],
         simple_file,
     )
-    return [complete_file, simple_file]
+    return [simple_file]
 
 
 def plot_3d_variables(
