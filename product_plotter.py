@@ -1,6 +1,7 @@
 """绘制 KeyMete 配置要素的完整图和透明图。"""
 
 import argparse
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
@@ -136,7 +137,7 @@ TEMPERATURE_BOUNDARIES = [-50, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 
 TEMPERATURE_LABELS = [str(value) for value in TEMPERATURE_BOUNDARIES]
 
 PROJECT_DIR = Path(__file__).resolve().parent
-COMPLETE_SIZE = (12.0, 10.0)
+COMPLETE_SIZE = (14.1, 11.7)
 SIMPLE_SIZE = (14.1, 11.7)
 IMAGE_DPI = 100
 MAP_BACKGROUND = "#ffffff"
@@ -582,27 +583,48 @@ def draw_discrete_colorbar(
     )
 
 
+def normalize_code(value: str, field_name: str, allow_underscore: bool = False) -> str:
+    """校验并标准化 schema_v3 文件名中的代码字段。"""
+    code = str(value).strip().upper()
+    pattern = r"[A-Z0-9_]+" if allow_underscore else r"[A-Z0-9]+"
+    if not re.fullmatch(pattern, code):
+        raise ValueError(f"Invalid {field_name} code for schema_v3: {value!r}")
+    return code
+
+
+def get_publish_codes(config: dict, variable_config: dict) -> tuple[str, str, str, str]:
+    """读取模式、区域、产品和要素的标准发布代码。"""
+    output_config = config["output"]
+    model = normalize_code(output_config["model_code"], "MODEL")
+    region = normalize_code(output_config["region_code"], "REGION")
+    product = normalize_code(variable_config["product"], "PRODUCT")
+    var_code = normalize_code(variable_config["var_code"], "VAR", allow_underscore=True)
+    return model, region, product, var_code
+
+
+def format_beijing_init(metadata: ProductMetadata) -> str:
+    """将源文件中的 UTC 起报时间转换为发布使用的北京时间。"""
+    return (metadata.init_time + timedelta(hours=8)).strftime("%Y%m%d%H")
+
+
 def build_image_name(
     config: dict,
     metadata: ProductMetadata,
-    variable_name: str,
+    variable_config: dict,
     complete: bool,
 ) -> str:
-    """按照可配置前缀生成二维产品文件名。"""
-    prefix = config["output"].get("filename_prefix", "").strip("_")
+    """按照 schema_v3 生成二维产品文件名。"""
+    model, region, product, var_code = get_publish_codes(config, variable_config)
+    variant = "COMPLETE" if complete else "SIMPLE"
     parts = [
-        part
-        for part in (
-            prefix,
-            metadata.init_time.strftime("%Y%m%d%H"),
-            f"F{metadata.forecast_text}",
-            variable_name,
-            "2D",
-        )
-        if part
+        model,
+        region,
+        format_beijing_init(metadata),
+        f"{metadata.forecast_hour:03d}",
+        product,
+        variant,
+        var_code,
     ]
-    if complete:
-        parts.append("COMPLETE")
     return "_".join(parts) + ".png"
 
 
@@ -610,16 +632,19 @@ def build_image_path(
     config: dict,
     output_dir: Path,
     metadata: ProductMetadata,
-    variable_name: str,
+    variable_config: dict,
     complete: bool,
 ) -> Path:
-    """返回 complete 或 simple 子目录中的图像路径。"""
-    variant_directory = "complete" if complete else "simple"
+    """返回 schema_v3 宏观场二维产品的发布路径。"""
+    _, _, product, var_code = get_publish_codes(config, variable_config)
     return (
         output_dir
-        / "2d"
-        / variant_directory
-        / build_image_name(config, metadata, variable_name, complete)
+        / product.lower()
+        / var_code.lower()
+        / "000hpa"
+        / format_beijing_init(metadata)
+        / f"F{metadata.forecast_hour:03d}"
+        / build_image_name(config, metadata, variable_config, complete)
     )
 
 
@@ -634,24 +659,23 @@ def format_pressure_level(level: int | float) -> str:
 def build_3d_image_name(
     config: dict,
     metadata: ProductMetadata,
-    variable_name: str,
+    variable_config: dict,
+    pressure_level: int | float,
     complete: bool,
 ) -> str:
-    """按照三维产品规范生成文件名。"""
-    prefix = config["output"].get("filename_prefix", "").strip("_")
+    """按照 schema_v3 生成三维产品文件名。"""
+    model, region, product, var_code = get_publish_codes(config, variable_config)
+    variant = "COMPLETE" if complete else "SIMPLE"
     parts = [
-        part
-        for part in (
-            prefix,
-            metadata.init_time.strftime("%Y%m%d%H"),
-            f"F{metadata.forecast_text}",
-            variable_name,
-            "3D",
-        )
-        if part
+        model,
+        region,
+        format_beijing_init(metadata),
+        f"{metadata.forecast_hour:03d}",
+        product,
+        variant,
+        f"{format_pressure_level(pressure_level)}HPA",
+        var_code,
     ]
-    if complete:
-        parts.append("COMPLETE")
     return "_".join(parts) + ".png"
 
 
@@ -659,18 +683,27 @@ def build_3d_image_path(
     config: dict,
     output_dir: Path,
     metadata: ProductMetadata,
-    variable_name: str,
+    variable_config: dict,
     pressure_level: int | float,
     complete: bool,
 ) -> Path:
-    """返回指定气压层 complete 或 simple 子目录中的三维图片路径。"""
-    variant_directory = "complete" if complete else "simple"
+    """返回 schema_v3 指定气压层三维产品的发布路径。"""
+    _, _, product, var_code = get_publish_codes(config, variable_config)
+    level_text = format_pressure_level(pressure_level)
     return (
         output_dir
-        / "3d"
-        / f"{format_pressure_level(pressure_level)}hpa"
-        / variant_directory
-        / build_3d_image_name(config, metadata, variable_name, complete)
+        / product.lower()
+        / var_code.lower()
+        / f"{level_text}hpa"
+        / format_beijing_init(metadata)
+        / f"F{metadata.forecast_hour:03d}"
+        / build_3d_image_name(
+            config,
+            metadata,
+            variable_config,
+            pressure_level,
+            complete,
+        )
     )
 
 
@@ -685,7 +718,7 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
                     config,
                     output_dir,
                     metadata,
-                    variable_config["name"],
+                    variable_config,
                     complete,
                 )
             )
@@ -697,7 +730,7 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
                         config,
                         output_dir,
                         metadata,
-                        variable_config["name"],
+                        variable_config,
                         pressure_level,
                         complete,
                     )
@@ -840,14 +873,14 @@ def plot_one_variable(
         config,
         output_dir,
         metadata,
-        variable_name,
+        variable_config,
         complete=True,
     )
     simple_file = build_image_path(
         config,
         output_dir,
         metadata,
-        variable_name,
+        variable_config,
         complete=False,
     )
     draw_complete_image(
@@ -907,7 +940,7 @@ def plot_one_3d_level(
         config,
         output_dir,
         metadata,
-        variable_name,
+        variable_config,
         pressure_level,
         complete=True,
     )
@@ -915,7 +948,7 @@ def plot_one_3d_level(
         config,
         output_dir,
         metadata,
-        variable_name,
+        variable_config,
         pressure_level,
         complete=False,
     )
@@ -1000,14 +1033,12 @@ def plot_source_file(
 
 
 def resolve_default_output_directory(config: dict, data_file: str | Path) -> Path:
-    """生成单文件调试模式使用的预报时效根目录。"""
-    metadata = parse_product_filename(data_file)
+    """返回单文件调试模式使用的模式图片根目录。"""
+    parse_product_filename(data_file)
     output_config = config["output"]
     output_dir = (
         Path(output_config["root_dir"])
         / output_config["model_directory"]
-        / metadata.init_time.strftime("%Y%m%d%H")
-        / f"F{metadata.forecast_text}"
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
@@ -1019,7 +1050,7 @@ def main() -> None:
     parser.add_argument("data_file", help="Input KeyMete NC file path.")
     parser.add_argument(
         "--output-dir",
-        help="Forecast-hour output root; defaults to the configured directory structure.",
+        help="Model image root; defaults to <output.root_dir>/<output.model_directory>.",
     )
     parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config JSON file.")
     args = parser.parse_args()

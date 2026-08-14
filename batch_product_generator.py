@@ -76,13 +76,11 @@ def resolve_output_directory(
     init_time: datetime,
     forecast_hour: int,
 ) -> Path:
-    """根据输出目录模板创建实际图片目录。"""
+    """返回 schema_v3 使用的模式图片根目录。"""
     output_config = config["output"]
     output_dir = (
         Path(output_config["root_dir"])
         / output_config["model_directory"]
-        / init_time.strftime("%Y%m%d%H")
-        / f"F{forecast_hour:02d}"
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
@@ -333,10 +331,11 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
         output_root=output_root,
         output_structure=(
             f"{config['output']['model_directory']}/"
-            "{YYYYMMDDHH}/F{forecast_hour}/"
-            "{2d/{complete|simple}|3d/{pressure}hpa/{complete|simple}}"
+            "{product}/{variable}/{pressure}hpa/"
+            "{BEIJING_INIT}/F{forecast_hour:03d}/*.png"
         ),
-        filename_prefix=config["output"].get("filename_prefix", ""),
+        model_code=config["output"]["model_code"],
+        region_code=config["output"]["region_code"],
         state_retention_days=config["state"]["retention_days"],
     )
     log_event(
