@@ -1036,10 +1036,7 @@ def resolve_default_output_directory(config: dict, data_file: str | Path) -> Pat
     """返回单文件调试模式使用的模式图片根目录。"""
     parse_product_filename(data_file)
     output_config = config["output"]
-    output_dir = (
-        Path(output_config["root_dir"])
-        / output_config["model_directory"]
-    )
+    output_dir = Path(output_config["root_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -1050,7 +1047,7 @@ def main() -> None:
     parser.add_argument("data_file", help="Input KeyMete NC file path.")
     parser.add_argument(
         "--output-dir",
-        help="Model image root; defaults to <output.root_dir>/<output.model_directory>.",
+        help="Model image root; defaults to <output.root_dir>.",
     )
     parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config JSON file.")
     args = parser.parse_args()

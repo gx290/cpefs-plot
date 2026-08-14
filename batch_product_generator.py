@@ -78,10 +78,7 @@ def resolve_output_directory(
 ) -> Path:
     """返回 schema_v3 使用的模式图片根目录。"""
     output_config = config["output"]
-    output_dir = (
-        Path(output_config["root_dir"])
-        / output_config["model_directory"]
-    )
+    output_dir = Path(output_config["root_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 
@@ -330,7 +327,6 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
         lookback_hours=config["batch"]["lookback_hours"],
         output_root=output_root,
         output_structure=(
-            f"{config['output']['model_directory']}/"
             "{product}/{variable}/{pressure}hpa/"
             "{BEIJING_INIT}/F{forecast_hour:03d}/*.png"
         ),
