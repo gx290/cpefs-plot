@@ -331,7 +331,7 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
             "{BEIJING_INIT}/F{forecast_hour:03d}/*.png"
         ),
         model_code=config["output"]["model_code"],
-        region_code=config["output"]["region_code"],
+        region_source="source_filename_field_6",
         state_retention_days=config["state"]["retention_days"],
     )
     log_event(
@@ -407,6 +407,7 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
             log_event(
                 "DRAW",
                 source=source_file.name,
+                region_code=product_metadata.region_code,
                 init_time=file_init_time.strftime("%Y%m%d%H"),
                 total_forecast_hours=product_metadata.total_forecast_hours,
                 forecast_hour=forecast_hour,

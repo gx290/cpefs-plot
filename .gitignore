@@ -15,5 +15,5 @@ __pycache__/
 /output_test/
 
 # Device-specific runtime files and local boundary datasets
-/jetson/
+/geojson/
 /shapefile/

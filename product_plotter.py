@@ -148,6 +148,7 @@ SIMPLE_ALPHA = 0.9
 class ProductMetadata:
     """文件名中与绘图有关的产品时间信息。"""
 
+    region_code: str
     init_time: datetime
     total_forecast_hours: int
     forecast_hour: int
@@ -159,7 +160,7 @@ class ProductMetadata:
 
 
 def parse_product_filename(data_file: str | Path) -> ProductMetadata:
-    """按固定字段位数解析顺序可变的产品文件名。"""
+    """解析文件名第6段区域代码，以及产品时间和预报时效。"""
     file_name = Path(data_file).name
     if not file_name.endswith(".nc"):
         raise ValueError(
@@ -167,6 +168,17 @@ def parse_product_filename(data_file: str | Path) -> ProductMetadata:
         )
 
     tokens = file_name[:-3].split("_")
+    if len(tokens) < 6:
+        raise ValueError(
+            f"Cannot parse REGION from {file_name}: expected at least 6 "
+            f"underscore-separated fields, found {len(tokens)}"
+        )
+    region_code = tokens[5].strip().upper()
+    if not re.fullmatch(r"[A-Z0-9]+", region_code):
+        raise ValueError(
+            f"Invalid REGION in field 6 of {file_name}: {tokens[5]!r}"
+        )
+
     field_specs = {
         "init time": 10,
         "total forecast hours": 3,
@@ -193,6 +205,7 @@ def parse_product_filename(data_file: str | Path) -> ProductMetadata:
         )
 
     return ProductMetadata(
+        region_code=region_code,
         init_time=datetime.strptime(init_time_text, "%Y%m%d%H"),
         total_forecast_hours=total_hours,
         forecast_hour=forecast_hour,
@@ -592,11 +605,15 @@ def normalize_code(value: str, field_name: str, allow_underscore: bool = False) 
     return code
 
 
-def get_publish_codes(config: dict, variable_config: dict) -> tuple[str, str, str, str]:
+def get_publish_codes(
+    config: dict,
+    metadata: ProductMetadata,
+    variable_config: dict,
+) -> tuple[str, str, str, str]:
     """读取模式、区域、产品和要素的标准发布代码。"""
     output_config = config["output"]
     model = normalize_code(output_config["model_code"], "MODEL")
-    region = normalize_code(output_config["region_code"], "REGION")
+    region = normalize_code(metadata.region_code, "REGION")
     product = normalize_code(variable_config["product"], "PRODUCT")
     var_code = normalize_code(variable_config["var_code"], "VAR", allow_underscore=True)
     return model, region, product, var_code
@@ -614,7 +631,7 @@ def build_image_name(
     complete: bool,
 ) -> str:
     """按照 schema_v3 生成二维产品文件名。"""
-    model, region, product, var_code = get_publish_codes(config, variable_config)
+    model, region, product, var_code = get_publish_codes(config, metadata, variable_config)
     variant = "COMPLETE" if complete else "SIMPLE"
     parts = [
         model,
@@ -636,7 +653,7 @@ def build_image_path(
     complete: bool,
 ) -> Path:
     """返回 schema_v3 宏观场二维产品的发布路径。"""
-    _, _, product, var_code = get_publish_codes(config, variable_config)
+    _, _, product, var_code = get_publish_codes(config, metadata, variable_config)
     return (
         output_dir
         / product.lower()
@@ -664,7 +681,7 @@ def build_3d_image_name(
     complete: bool,
 ) -> str:
     """按照 schema_v3 生成三维产品文件名。"""
-    model, region, product, var_code = get_publish_codes(config, variable_config)
+    model, region, product, var_code = get_publish_codes(config, metadata, variable_config)
     variant = "COMPLETE" if complete else "SIMPLE"
     parts = [
         model,
@@ -688,7 +705,7 @@ def build_3d_image_path(
     complete: bool,
 ) -> Path:
     """返回 schema_v3 指定气压层三维产品的发布路径。"""
-    _, _, product, var_code = get_publish_codes(config, variable_config)
+    _, _, product, var_code = get_publish_codes(config, metadata, variable_config)
     level_text = format_pressure_level(pressure_level)
     return (
         output_dir

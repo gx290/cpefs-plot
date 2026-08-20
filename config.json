@@ -9,8 +9,7 @@
   },
   "output": {
     "root_dir": "D:/meteo/output",
-    "model_code": "CPEFS",
-    "region_code": "ANCN"
+    "model_code": "CPEFS"
   },
   "state": {
     "directory": "state",
