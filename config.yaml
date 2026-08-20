@@ -1,0 +1,242 @@
+source:
+  root_dir: "D:/meteo/datasets"
+  directory_template: ""
+  file_pattern: "*.nc"
+
+batch:
+  lookback_hours: 12
+
+output:
+  root_dir: "D:/meteo/output"
+  model_code: "CPEFS"
+
+state:
+  directory: "state"
+  filename_template: "processed_{YYYYMMDD}.json"
+  retention_days: 30
+
+plot:
+  title_prefix: "TJCM"
+  extent: [107.48, 123.5, 32.98, 47.02]
+  latitude: "lat"
+  longitude: "lon"
+  level: "level"
+
+boundaries:
+  country_file: "shapefile/gadm36_CHN_0.shp"
+  province_file: "shapefile/gadm36_CHN_1.shp"
+  city_file: "shapefile/gadm36_CHN_2.shp"
+  district_file: "shapefile/gadm36_CHN_3.shp"
+  country_linewidth: 2.0
+  province_linewidth: 1.8
+  city_linewidth: 0.45
+  district_linewidth: 0.45
+
+# 公共颜色模板。十六进制颜色必须使用引号，避免被 YAML 当作注释。
+color_templates:
+  scale1:
+    colors:
+      - "#b9afc6"
+      - "#3876d2"
+      - "#5ad073"
+      - "#458e39"
+      - "#66d800"
+      - "#f2f51b"
+      - "#c9a94e"
+      - "#edb800"
+      - "#ed2213"
+      - "#f35349"
+      - "#fbae9c"
+      - "#af4f6b"
+      - "#76287b"
+      - "#b667c7"
+
+  scale2:
+    colors:
+      - "#b667c7"
+      - "#76287b"
+      - "#af4f6b"
+      - "#fbae9c"
+      - "#f35349"
+      - "#ed2213"
+      - "#edb800"
+      - "#c9a94e"
+      - "#f2f51b"
+      - "#66d800"
+      - "#458e39"
+      - "#5ad073"
+      - "#3876d2"
+      - "#b9afc6"
+
+  scale3:
+    colors:
+      - "#5176c5"
+      - "#3ba3c2"
+      - "#7ad3cb"
+      - "#458e39"
+      - "#66d800"
+      - "#c6ef9d"
+      - "#c9a94e"
+      - "#f2f51b"
+      - "#edb800"
+      - "#ed2213"
+      - "#f35349"
+      - "#fbae9c"
+      - "#a03084"
+      - "#fe6fe3"
+
+  scale4:
+    colors:
+      - "#b9afc6"
+      - "#3876d2"
+      - "#5ad073"
+      - "#458e39"
+      - "#66d800"
+      - "#f2f51b"
+      - "#c9a94e"
+      - "#edb800"
+      - "#ed2213"
+      - "#f35349"
+      - "#fbae9c"
+      - "#ef23a7"
+      - "#fe6fe3"
+      - "#d3cab6"
+
+  scale5:
+    colors:
+      - "#ffffff"
+      - "#b9afc6"
+      - "#3876d2"
+      - "#5ad073"
+      - "#458e39"
+      - "#66d800"
+      - "#f2f51b"
+      - "#c9a94e"
+      - "#edb800"
+      - "#ed2213"
+      - "#f35349"
+      - "#fbae9c"
+      - "#af4f6b"
+      - "#76287b"
+
+variables:
+  - name: "Tc"
+    dimension: "3D"
+    product: "SYNOPTIC"
+    var_code: "TEMP"
+    display_name: "温度"
+    plot_unit: "°C"
+    color_template: "scale5"
+    color_mode: "interval"
+    boundaries: [-50, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15]
+    invalid_values: []
+
+  - name: "dbz"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "DBZ"
+    display_name: "雷达反射率"
+    plot_unit: "dBZ"
+    color_template: "scale3"
+    color_mode: "threshold"
+    levels: [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]
+    invalid_values: []
+
+  - name: "qcloud"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QCLOUD"
+    display_name: "云水比含水量"
+    plot_unit: "g/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5]
+    invalid_values: []
+
+  - name: "qrain"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QRAIN"
+    display_name: "雨水比含水量"
+    plot_unit: "g/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5]
+    invalid_values: []
+
+  - name: "qice"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QICE"
+    display_name: "冰晶比含水量"
+    plot_unit: "g/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5]
+    invalid_values: []
+
+  - name: "qsnow"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QSNOW"
+    display_name: "雪比含水量"
+    plot_unit: "g/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5]
+    invalid_values: []
+
+  - name: "qgraup"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QGRAUP"
+    display_name: "霰比含水量"
+    plot_unit: "g/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5]
+    invalid_values: []
+
+  - name: "qnrain"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QNRAIN"
+    display_name: "雨滴数浓度"
+    plot_unit: "1/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.1, 1, 10, 30, 50, 80, 110, 140, 170, 210, 240, 280, 320, 360]
+    invalid_values: []
+
+  - name: "qnice"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QNICE"
+    display_name: "冰晶数浓度"
+    plot_unit: "1/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [1, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 1200, 1500, 1800, 2000]
+    invalid_values: []
+
+  - name: "qnsnow"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QNSNOW"
+    display_name: "雪数浓度"
+    plot_unit: "1/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [1, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 1200, 1500, 1800, 2000]
+    invalid_values: []
+
+  - name: "qngraupel"
+    dimension: "3D"
+    product: "MICRO"
+    var_code: "QNGRAUPEL"
+    display_name: "霰数浓度"
+    plot_unit: "1/kg"
+    color_template: "scale4"
+    color_mode: "threshold"
+    levels: [0.1, 1, 10, 30, 50, 80, 110, 140, 170, 210, 240, 280, 320, 360]
+    invalid_values: []

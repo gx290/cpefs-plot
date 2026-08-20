@@ -1,17 +1,124 @@
 import argparse
-import json
+import re
 from pathlib import Path
 
 import xarray as xr
+import yaml
 
 
-CONFIG_FILE = Path(__file__).with_name("config.json")
+CONFIG_FILE = Path(__file__).with_name("config.yaml")
+
+
+def get_source_name(variable_config: dict) -> str:
+    """返回 NC 中的变量名；未配置 source 时直接使用 name。"""
+    return variable_config.get("source", variable_config["name"])
+
+
+def _validate_number_list(values, field_path: str) -> None:
+    """校验色标分级值是严格递增的数字列表。"""
+    if not isinstance(values, list) or not values:
+        raise ValueError(f"{field_path} must be a non-empty list")
+    if any(not isinstance(value, (int, float)) or isinstance(value, bool) for value in values):
+        raise ValueError(f"{field_path} must contain only numbers")
+    if any(current >= following for current, following in zip(values, values[1:])):
+        raise ValueError(f"{field_path} must be strictly increasing")
+
+
+def validate_config(config: dict) -> None:
+    """在读取 NC 前校验 YAML 的必要字段和色标配置。"""
+    if not isinstance(config, dict):
+        raise ValueError("The YAML root must be a mapping")
+
+    for section in ("source", "batch", "output", "state", "plot", "boundaries"):
+        if not isinstance(config.get(section), dict):
+            raise ValueError(f"Missing or invalid config section: {section}")
+
+    color_templates = config.get("color_templates")
+    if not isinstance(color_templates, dict) or not color_templates:
+        raise ValueError("color_templates must be a non-empty mapping")
+    color_pattern = re.compile(r"#[0-9A-Fa-f]{6}")
+    for template_name, template in color_templates.items():
+        colors = template.get("colors") if isinstance(template, dict) else None
+        if not isinstance(colors, list) or not colors:
+            raise ValueError(f"color_templates.{template_name}.colors must be a non-empty list")
+        if any(not isinstance(color, str) or not color_pattern.fullmatch(color) for color in colors):
+            raise ValueError(
+                f"color_templates.{template_name}.colors must contain #RRGGBB colors"
+            )
+
+    variables = config.get("variables")
+    if not isinstance(variables, list):
+        raise ValueError("variables must be a list")
+
+    required_fields = (
+        "name",
+        "dimension",
+        "product",
+        "var_code",
+        "display_name",
+        "plot_unit",
+        "color_template",
+        "color_mode",
+        "invalid_values",
+    )
+    variable_names = set()
+    for index, item in enumerate(variables):
+        path = f"variables[{index}]"
+        if not isinstance(item, dict):
+            raise ValueError(f"{path} must be a mapping")
+        missing_fields = [field for field in required_fields if field not in item]
+        if missing_fields:
+            raise ValueError(f"{path} is missing fields: {missing_fields}")
+
+        variable_name = item["name"]
+        if not isinstance(variable_name, str) or not variable_name.strip():
+            raise ValueError(f"{path}.name must be a non-empty string")
+        if variable_name in variable_names:
+            raise ValueError(f"Duplicate variable name: {variable_name}")
+        variable_names.add(variable_name)
+
+        if str(item["dimension"]).upper() not in {"2D", "3D"}:
+            raise ValueError(f"{path}.dimension must be 2D or 3D")
+        if "source" in item and (
+            not isinstance(item["source"], str) or not item["source"].strip()
+        ):
+            raise ValueError(f"{path}.source must be a non-empty string when provided")
+        if not isinstance(item["invalid_values"], list):
+            raise ValueError(f"{path}.invalid_values must be a list")
+
+        template_name = item["color_template"]
+        if template_name not in color_templates:
+            raise ValueError(f"{path}.color_template references unknown template: {template_name}")
+        colors = color_templates[template_name]["colors"]
+        color_mode = str(item["color_mode"]).lower()
+        if color_mode == "threshold":
+            values = item.get("levels")
+            value_path = f"{path}.levels"
+            _validate_number_list(values, value_path)
+            if len(colors) != len(values):
+                raise ValueError(
+                    f"{path} threshold mode requires one color for each level: "
+                    f"colors={len(colors)}, levels={len(values)}"
+                )
+        elif color_mode == "interval":
+            values = item.get("boundaries")
+            value_path = f"{path}.boundaries"
+            _validate_number_list(values, value_path)
+            if len(colors) != len(values) + 1:
+                raise ValueError(
+                    f"{path} interval mode requires one more color than boundaries: "
+                    f"colors={len(colors)}, boundaries={len(values)}"
+                )
+        else:
+            raise ValueError(f"{path}.color_mode must be threshold or interval")
 
 
 def load_config(config_path: Path = CONFIG_FILE) -> dict:
-    """读取 JSON 配置文件。"""
+    """读取并校验 YAML 配置文件。"""
     with config_path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+        config = yaml.safe_load(file)
+    validate_config(config)
+    return config
 
 
 def open_dataset(data_file: str | Path) -> xr.Dataset:
@@ -73,7 +180,7 @@ def extract_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
     required_names = [
         latitude_name,
         longitude_name,
-        *(item["source"] for item in variable_configs),
+        *(get_source_name(item) for item in variable_configs),
     ]
     missing_names = [name for name in required_names if name not in ds.variables]
     if missing_names:
@@ -86,7 +193,7 @@ def extract_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
 
     data_vars: dict[str, xr.DataArray] = {}
     for item in variable_configs:
-        source_name = item["source"]
+        source_name = get_source_name(item)
         output_name = item["name"]
         data_array = squeeze_to_grid(ds[source_name], source_name).copy()
         if data_array.dims != latitude.dims:
@@ -126,7 +233,7 @@ def extract_3d_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
         latitude_name,
         longitude_name,
         level_name,
-        *(item["source"] for item in variable_configs),
+        *(get_source_name(item) for item in variable_configs),
     ]
     missing_names = [name for name in required_names if name not in ds.variables]
     if missing_names:
@@ -148,7 +255,7 @@ def extract_3d_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
 
     data_vars: dict[str, xr.DataArray] = {}
     for item in variable_configs:
-        source_name = item["source"]
+        source_name = get_source_name(item)
         output_name = item["name"]
         data_array = squeeze_to_volume(ds[source_name], source_name).copy()
         try:
@@ -231,7 +338,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Parse one KeyMete NC file and save it as CSV.")
     parser.add_argument("data_file", help="Input KeyMete NC file path.")
     parser.add_argument("output_file", help="CSV output file path.")
-    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config JSON file.")
+    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config YAML file.")
     args = parser.parse_args()
 
     config = load_config(args.config)

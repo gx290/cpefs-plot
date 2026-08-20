@@ -498,7 +498,7 @@ def main() -> int:
         action="store_true",
         help="Redraw the exact input init time and overwrite existing PNG files.",
     )
-    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to batch config JSON file.")
+    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to batch config YAML file.")
     args = parser.parse_args()
 
     mode = "redraw" if args.redraw else "normal"

@@ -30,112 +30,6 @@ from dataload import (
 )
 
 
-COLOR_SCALE_COLORS = {
-    1: [
-        "#b9afc6",
-        "#3876d2",
-        "#5ad073",
-        "#458e39",
-        "#66d800",
-        "#f2f51b",
-        "#c9a94e",
-        "#edb800",
-        "#ed2213",
-        "#f35349",
-        "#fbae9c",
-        "#af4f6b",
-        "#76287b",
-        "#b667c7",
-    ],
-    2: [
-        "#b667c7",
-        "#76287b",
-        "#af4f6b",
-        "#fbae9c",
-        "#f35349",
-        "#ed2213",
-        "#edb800",
-        "#c9a94e",
-        "#f2f51b",
-        "#66d800",
-        "#458e39",
-        "#5ad073",
-        "#3876d2",
-        "#b9afc6",
-    ],
-    3: [
-        "#5176c5",
-        "#3ba3c2",
-        "#7ad3cb",
-        "#458e39",
-        "#66d800",
-        "#c6ef9d",
-        "#c9a94e",
-        "#f2f51b",
-        "#edb800",
-        "#ed2213",
-        "#f35349",
-        "#fbae9c",
-        "#a03084",
-        "#fe6fe3",
-    ],
-    4: [
-        "#b9afc6",
-        "#3876d2",
-        "#5ad073",
-        "#458e39",
-        "#66d800",
-        "#f2f51b",
-        "#c9a94e",
-        "#edb800",
-        "#ed2213",
-        "#f35349",
-        "#fbae9c",
-        "#ef23a7",
-        "#fe6fe3",
-        "#d3cab6",
-    ],
-    5: [
-        "#ffffff",
-        "#b9afc6",
-        "#3876d2",
-        "#5ad073",
-        "#458e39",
-        "#66d800",
-        "#f2f51b",
-        "#c9a94e",
-        "#edb800",
-        "#ed2213",
-        "#f35349",
-        "#fbae9c",
-        "#af4f6b",
-        "#76287b",
-    ],
-}
-
-VARIABLE_LEVELS = {
-    "cband": [0.01, 0.1, 0.5, 1, 1.5, 2, 3, 4, 5, 8, 10, 20, 50, 80],  # 云带
-    "vil": [0.01, 0.1, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 7.5],  # 垂直累计液态水
-    "visl": [0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5],  # 垂直累计过冷水
-    "cloudtoph": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16],  # 云顶高度
-    "cloudtopt": [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20],  # 云顶温度
-    "cloudboth": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16],  # 云底高度
-    "cloudbott": [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20],  # 云底温度
-    "max_dbz": [-5, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65],  # 垂直最大反射率
-    "dbz": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70],  # 雷达反射率
-    "qcloud": [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5],  # 云水比含水量（云水混合比）
-    "qrain": [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5],  # 雨水比含水量（雨水混合比）
-    "qice": [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5],  # 冰晶比含水量（冰晶混合比）
-    "qsnow": [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5],  # 雪比含水量（雪混合比）
-    "qgraup": [0.001, 0.01, 0.05, 0.1, 0.3, 0.5, 0.7, 1, 1.5, 2, 2.5, 3, 4, 5],  # 霰比含水量（霰混合比）
-    "qnrain": [0.1, 1, 10, 30, 50, 80, 110, 140, 170, 210, 240, 280, 320, 360],  # 雨滴数浓度
-    "qngraupel": [0.1, 1, 10, 30, 50, 80, 110, 140, 170, 210, 240, 280, 320, 360],  # 霰数浓度
-    "qnice": [1, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 1200, 1500, 1800, 2000],  # 冰晶数浓度
-    "qnsnow": [1, 10, 25, 50, 75, 100, 250, 500, 750, 1000, 1200, 1500, 1800, 2000],  # 雪数浓度
-}
-TEMPERATURE_BOUNDARIES = [-50, -40, -35, -30, -25, -20, -15, -10, -5, 0, 5, 10, 15]
-TEMPERATURE_LABELS = [str(value) for value in TEMPERATURE_BOUNDARIES]
-
 PROJECT_DIR = Path(__file__).resolve().parent
 COMPLETE_SIZE = (14.1, 11.7)
 SIMPLE_SIZE = (14.1, 11.7)
@@ -284,7 +178,8 @@ def prepare_values(
 
     source_unit = data_array.attrs.get("units") or data_array.attrs.get("unit")
     if not source_unit:
-        raise ValueError(f"Variable {variable_config['source']} does not define units")
+        source_name = variable_config.get("source", variable_config["name"])
+        raise ValueError(f"Variable {source_name} does not define units")
 
     values = convert_values(values, source_unit, variable_config["plot_unit"])
     invalid_mask |= ~np.isfinite(values)
@@ -293,53 +188,22 @@ def prepare_values(
     return np.ma.array(values, mask=invalid_mask)
 
 
-def get_color_config(variable_config: dict) -> tuple[list[int | float], list[str]]:
-    """根据要素名称和色标编号返回文档规定的等级与颜色。"""
-    variable_name = variable_config["name"]
-    color_scale = variable_config.get("color_scale")
-    if variable_name not in VARIABLE_LEVELS:
-        raise ValueError(f"No levels configured for variable: {variable_name}")
-    if color_scale not in COLOR_SCALE_COLORS:
-        raise ValueError(
-            f"Unsupported color scale {color_scale!r} for variable: {variable_name}"
-        )
-
-    levels = VARIABLE_LEVELS[variable_name]
-    colors = COLOR_SCALE_COLORS[color_scale]
-    if len(levels) > len(colors):
-        raise ValueError(
-            f"Variable {variable_name} has more levels than color scale {color_scale}"
-        )
-    # 文档中垂直累计液态水的最后一个阈值为空，因此只使用有数值的颜色列。
-    return levels, colors[:len(levels)]
-
-
-def get_3d_color_config(
+def get_color_config(
+    config: dict,
     variable_config: dict,
-) -> tuple[list[int | float], list[str], list[str], bool]:
-    """返回三维要素的分级值、颜色、色标标签和低值掩膜方式。"""
-    variable_name = variable_config["name"]
-    color_scale = variable_config.get("color_scale")
-    if color_scale not in COLOR_SCALE_COLORS:
-        raise ValueError(
-            f"Unsupported color scale {color_scale!r} for variable: {variable_name}"
-        )
-
-    colors = COLOR_SCALE_COLORS[color_scale]
-    if variable_name.lower() == "tc":
-        if len(colors) != len(TEMPERATURE_BOUNDARIES) + 1:
-            raise ValueError("Temperature color scale must contain 14 colors")
-        return TEMPERATURE_BOUNDARIES, colors, TEMPERATURE_LABELS, False
-
-    normalized_name = variable_name.lower()
-    if normalized_name not in VARIABLE_LEVELS:
-        raise ValueError(f"No 3-D levels configured for variable: {variable_name}")
-    levels = VARIABLE_LEVELS[normalized_name]
-    if len(levels) != len(colors):
-        raise ValueError(
-            f"3-D variable {variable_name} must have one color for every level"
-        )
-    return levels, colors, [str(value) for value in levels], True
+) -> tuple[list[int | float], list[str], list[str], bool, str]:
+    """从 YAML 返回分级值、颜色、标签、低值掩膜方式和色标模式。"""
+    template_name = variable_config["color_template"]
+    colors = list(config["color_templates"][template_name]["colors"])
+    color_mode = str(variable_config["color_mode"]).lower()
+    if color_mode == "threshold":
+        values = list(variable_config["levels"])
+        mask_below_first_level = True
+    else:
+        values = list(variable_config["boundaries"])
+        mask_below_first_level = False
+    labels = [str(value) for value in values]
+    return values, colors, labels, mask_below_first_level, color_mode
 
 
 def build_data_color_settings(
@@ -884,9 +748,20 @@ def plot_one_variable(
 
     latitude = dataset[latitude_name].values
     longitude = dataset[longitude_name].values
-    levels, colors = get_color_config(variable_config)
-    values = prepare_values(dataset[variable_name], variable_config, levels)
-    cmap, norm = build_data_color_settings(levels, colors)
+    levels, colors, colorbar_labels, mask_below, color_mode = get_color_config(
+        config,
+        variable_config,
+    )
+    values = prepare_values(
+        dataset[variable_name],
+        variable_config,
+        levels,
+        mask_below_first_level=mask_below,
+    )
+    if color_mode == "interval":
+        cmap, norm = build_interval_color_settings(levels, colors)
+    else:
+        cmap, norm = build_data_color_settings(levels, colors)
 
     complete_file = build_image_path(
         config,
@@ -908,7 +783,7 @@ def plot_one_variable(
     #     values,
     #     cmap,
     #     norm,
-    #     [str(value) for value in levels],
+    #     colorbar_labels,
     #     colors,
     #     variable_config,
     #     metadata,
@@ -943,14 +818,17 @@ def plot_one_3d_level(
     level_name = plot_config["level"]
     level_data = dataset[variable_name].sel({level_name: pressure_level})
 
-    levels, colors, colorbar_labels, mask_below = get_3d_color_config(variable_config)
+    levels, colors, colorbar_labels, mask_below, color_mode = get_color_config(
+        config,
+        variable_config,
+    )
     values = prepare_values(
         level_data,
         variable_config,
         levels,
         mask_below_first_level=mask_below,
     )
-    if variable_name.lower() == "tc":
+    if color_mode == "interval":
         cmap, norm = build_interval_color_settings(levels, colors)
     else:
         cmap, norm = build_data_color_settings(levels, colors)
@@ -1068,7 +946,7 @@ def main() -> None:
         "--output-dir",
         help="Model image root; defaults to <output.root_dir>.",
     )
-    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config JSON file.")
+    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config YAML file.")
     args = parser.parse_args()
 
     config = load_config(args.config)
