@@ -1,6 +1,5 @@
 """绘制 KeyMete 配置要素的完整图和透明图。"""
 
-import argparse
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -22,11 +21,8 @@ from matplotlib.colors import BoundaryNorm, ListedColormap, Normalize
 from shapely.geometry import box
 
 from dataload import (
-    CONFIG_FILE,
     get_variable_configs,
-    load_config,
     read_pressure_levels,
-    read_product_data_from_file,
 )
 
 
@@ -593,8 +589,7 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
     metadata = parse_product_filename(source_file)
     paths = []
     for variable_config in get_variable_configs(config, "2D"):
-        # 完整底图暂时关闭，恢复时将 True 加回变体列表。
-        for complete in (False,):
+        for complete in (True, False):
             paths.append(
                 build_image_path(
                     config,
@@ -606,8 +601,7 @@ def expected_image_paths(config: dict, source_file: str | Path, output_dir: Path
             )
     for pressure_level in read_pressure_levels(source_file, config):
         for variable_config in get_variable_configs(config, "3D"):
-            # 完整底图暂时关闭，恢复时将 True 加回变体列表。
-            for complete in (False,):
+            for complete in (True, False):
                 paths.append(
                     build_3d_image_path(
                         config,
@@ -777,19 +771,19 @@ def plot_one_variable(
         variable_config,
         complete=False,
     )
-    # draw_complete_image(
-    #     latitude,
-    #     longitude,
-    #     values,
-    #     cmap,
-    #     norm,
-    #     colorbar_labels,
-    #     colors,
-    #     variable_config,
-    #     metadata,
-    #     config,
-    #     complete_file,
-    # )
+    draw_complete_image(
+        latitude,
+        longitude,
+        values,
+        cmap,
+        norm,
+        colorbar_labels,
+        colors,
+        variable_config,
+        metadata,
+        config,
+        complete_file,
+    )
     draw_simple_image(
         latitude,
         longitude,
@@ -799,7 +793,7 @@ def plot_one_variable(
         config["plot"]["extent"],
         simple_file,
     )
-    return [simple_file]
+    return [complete_file, simple_file]
 
 
 def plot_one_3d_level(
@@ -849,20 +843,20 @@ def plot_one_3d_level(
         pressure_level,
         complete=False,
     )
-    # draw_complete_image(
-    #     latitude,
-    #     longitude,
-    #     values,
-    #     cmap,
-    #     norm,
-    #     colorbar_labels,
-    #     colors,
-    #     variable_config,
-    #     metadata,
-    #     config,
-    #     complete_file,
-    #     pressure_level=pressure_level,
-    # )
+    draw_complete_image(
+        latitude,
+        longitude,
+        values,
+        cmap,
+        norm,
+        colorbar_labels,
+        colors,
+        variable_config,
+        metadata,
+        config,
+        complete_file,
+        pressure_level=pressure_level,
+    )
     draw_simple_image(
         latitude,
         longitude,
@@ -872,7 +866,7 @@ def plot_one_3d_level(
         plot_config["extent"],
         simple_file,
     )
-    return [simple_file]
+    return [complete_file, simple_file]
 
 
 def plot_3d_variables(
@@ -927,45 +921,3 @@ def plot_source_file(
         )
     image_files.extend(plot_3d_variables(dataset_3d, config, metadata, output_dir))
     return image_files
-
-
-def resolve_default_output_directory(config: dict, data_file: str | Path) -> Path:
-    """返回单文件调试模式使用的模式图片根目录。"""
-    parse_product_filename(data_file)
-    output_config = config["output"]
-    output_dir = Path(output_config["root_dir"])
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir
-
-
-def main() -> None:
-    """单独绘制一个 KeyMete NC 文件。"""
-    parser = argparse.ArgumentParser(description="Draw configured products for one KeyMete NC file.")
-    parser.add_argument("data_file", help="Input KeyMete NC file path.")
-    parser.add_argument(
-        "--output-dir",
-        help="Model image root; defaults to <output.root_dir>.",
-    )
-    parser.add_argument("--config", type=Path, default=CONFIG_FILE, help="Path to config YAML file.")
-    args = parser.parse_args()
-
-    config = load_config(args.config)
-    output_dir = (
-        Path(args.output_dir)
-        if args.output_dir
-        else resolve_default_output_directory(config, args.data_file)
-    )
-    dataset_2d, dataset_3d = read_product_data_from_file(args.data_file, config)
-    image_files = plot_source_file(
-        dataset_2d,
-        dataset_3d,
-        config,
-        args.data_file,
-        output_dir,
-    )
-    for image_file in image_files:
-        print(f"Saved image to: {image_file}")
-
-
-if __name__ == "__main__":
-    main()

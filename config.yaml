@@ -15,6 +15,11 @@ state:
   filename_template: "processed_{YYYYMMDD}.json"
   retention_days: 30
 
+manifest:
+  schema_version: 3
+  renderer_version: "arm64-v10"
+  grid_spacing_degrees: 0.03
+
 plot:
   title_prefix: "TJCM"
   extent: [107.48, 123.5, 32.98, 47.02]
@@ -50,6 +55,23 @@ color_templates:
       - "#af4f6b"
       - "#76287b"
       - "#b667c7"
+
+  # 垂直累计液态水在色标文档中只有13个有效等级。
+  scale1_vil:
+    colors:
+      - "#b9afc6"
+      - "#3876d2"
+      - "#5ad073"
+      - "#458e39"
+      - "#66d800"
+      - "#f2f51b"
+      - "#c9a94e"
+      - "#edb800"
+      - "#ed2213"
+      - "#f35349"
+      - "#fbae9c"
+      - "#af4f6b"
+      - "#76287b"
 
   scale2:
     colors:
@@ -120,6 +142,94 @@ color_templates:
       - "#76287b"
 
 variables:
+  - name: "cband"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "CBAND"
+    display_name: "云带"
+    plot_unit: "mm"
+    color_template: "scale1"
+    color_mode: "threshold"
+    levels: [0.01, 0.1, 0.5, 1, 1.5, 2, 3, 4, 5, 8, 10, 20, 50, 80]
+    invalid_values: []
+
+  - name: "vil"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "VIL"
+    display_name: "垂直累计液态水"
+    plot_unit: "mm"
+    color_template: "scale1_vil"
+    color_mode: "threshold"
+    levels: [0.01, 0.1, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 7.5]
+    invalid_values: []
+
+  - name: "visl"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "VISL"
+    display_name: "垂直累计过冷水"
+    plot_unit: "mm"
+    color_template: "scale1"
+    color_mode: "threshold"
+    levels: [0.01, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.5, 2, 2.5, 3, 4, 5]
+    invalid_values: []
+
+  - name: "cloudtoph"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "CLOUDTOPH"
+    display_name: "云顶高度"
+    plot_unit: "km"
+    color_template: "scale1"
+    color_mode: "threshold"
+    levels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16]
+    invalid_values: []
+
+  - name: "cloudtopt"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "CLOUDTOPT"
+    display_name: "云顶温度"
+    plot_unit: "°C"
+    color_template: "scale2"
+    color_mode: "threshold"
+    levels: [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20]
+    invalid_values: []
+
+  - name: "cloudboth"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "CLOUDBOTH"
+    display_name: "云底高度"
+    plot_unit: "km"
+    color_template: "scale1"
+    color_mode: "threshold"
+    levels: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16]
+    invalid_values: []
+
+  - name: "cloudbott"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "CLOUDBOTT"
+    display_name: "云底温度"
+    plot_unit: "°C"
+    color_template: "scale2"
+    color_mode: "threshold"
+    levels: [-70, -60, -50, -40, -30, -25, -20, -15, -10, -5, 0, 5, 10, 20]
+    invalid_values: []
+
+  - name: "max_dbz"
+    dimension: "2D"
+    product: "MACRO"
+    var_code: "MAX_DBZ"
+    display_name: "垂直最大反射率"
+    plot_unit: "dBZ"
+    color_template: "scale3"
+    color_mode: "threshold"
+    levels: [-5, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65]
+    invalid_values: []
+
   - name: "Tc"
     dimension: "3D"
     product: "SYNOPTIC"

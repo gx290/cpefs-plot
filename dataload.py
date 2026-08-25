@@ -29,9 +29,32 @@ def validate_config(config: dict) -> None:
     if not isinstance(config, dict):
         raise ValueError("The YAML root must be a mapping")
 
-    for section in ("source", "batch", "output", "state", "plot", "boundaries"):
+    for section in (
+        "source",
+        "batch",
+        "output",
+        "state",
+        "manifest",
+        "plot",
+        "boundaries",
+    ):
         if not isinstance(config.get(section), dict):
             raise ValueError(f"Missing or invalid config section: {section}")
+
+    manifest_config = config["manifest"]
+    if not isinstance(manifest_config.get("schema_version"), int):
+        raise ValueError("manifest.schema_version must be an integer")
+    if not isinstance(manifest_config.get("renderer_version"), str) or not manifest_config[
+        "renderer_version"
+    ].strip():
+        raise ValueError("manifest.renderer_version must be a non-empty string")
+    grid_spacing = manifest_config.get("grid_spacing_degrees")
+    if (
+        not isinstance(grid_spacing, (int, float))
+        or isinstance(grid_spacing, bool)
+        or grid_spacing <= 0
+    ):
+        raise ValueError("manifest.grid_spacing_degrees must be a positive number")
 
     color_templates = config.get("color_templates")
     if not isinstance(color_templates, dict) or not color_templates:

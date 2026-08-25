@@ -10,7 +10,9 @@ from dataload import (
     load_config,
     read_product_data_from_file,
 )
+from manifest_writer import build_manifest_path, write_manifest
 from product_plotter import (
+    SIMPLE_ALPHA,
     expected_image_paths,
     parse_product_filename,
     parse_time_details_from_filename,
@@ -279,10 +281,19 @@ def relative_image_paths(image_paths: list[Path], output_root: Path) -> list[str
     return result
 
 
-def is_processed(state: dict, key: str, expected_paths: list[Path]) -> bool:
-    """状态成功且当前配置要求的全部图片存在时才判定为已完成。"""
+def is_processed(
+    state: dict,
+    key: str,
+    expected_paths: list[Path],
+    manifest_path: Path,
+) -> bool:
+    """状态成功且当前配置要求的全部图片与清单存在时才判定为已完成。"""
     entry = state["files"].get(key, {})
-    return entry.get("status") == "success" and all(path.is_file() for path in expected_paths)
+    return (
+        entry.get("status") == "success"
+        and all(path.is_file() for path in expected_paths)
+        and manifest_path.is_file()
+    )
 
 
 def load_relevant_states(
@@ -385,6 +396,7 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
         state = state_cache[state_file]
         key = source_key(source_file, source_root)
         expected_paths = expected_image_paths(config, source_file, output_dir)
+        manifest_path = build_manifest_path(output_dir, product_metadata)
 
         if key not in state["files"] and key in legacy_state["files"]:
             state["files"][key] = legacy_state["files"][key]
@@ -392,12 +404,50 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
             promoted_legacy_count += 1
             log_event("STATE_MIGRATE", source=source_file, target=state_file)
 
-        if not redraw and is_processed(state, key, expected_paths):
+        state_entry = state["files"].get(key, {})
+        images_are_complete = all(path.is_file() for path in expected_paths)
+        if (
+            not redraw
+            and state_entry.get("status") == "success"
+            and images_are_complete
+            and not manifest_path.is_file()
+        ):
+            try:
+                manifest_path = write_manifest(
+                    config,
+                    product_metadata,
+                    source_file,
+                    expected_paths,
+                    output_dir,
+                    SIMPLE_ALPHA,
+                )
+                state_entry["manifest"] = relative_image_paths(
+                    [manifest_path],
+                    output_root,
+                )[0]
+                save_state(state_file, state)
+                log_event(
+                    "MANIFEST",
+                    source=source_file.name,
+                    path=manifest_path,
+                    images=len(expected_paths),
+                    status="backfilled",
+                )
+            except Exception as exc:
+                log_event(
+                    "WARNING",
+                    stage="manifest_backfill",
+                    source=source_file.name,
+                    error=exc,
+                )
+
+        if not redraw and is_processed(state, key, expected_paths, manifest_path):
             log_event(
                 "SKIP",
                 source=source_file.name,
                 reason="already_processed",
                 expected_images=len(expected_paths),
+                manifest=manifest_path,
             )
             skipped_count += 1
             continue
@@ -438,12 +488,37 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
             stage = "verify_output"
             if not all(path.is_file() for path in image_paths):
                 raise RuntimeError("Not all configured image files were created")
+            actual_paths = {path.resolve() for path in image_paths}
+            required_paths = {path.resolve() for path in expected_paths}
+            if actual_paths != required_paths:
+                raise RuntimeError(
+                    "Generated image set does not match the configured image set: "
+                    f"generated={len(actual_paths)}, expected={len(required_paths)}"
+                )
+
+            stage = "write_manifest"
+            manifest_path = write_manifest(
+                config,
+                product_metadata,
+                source_file,
+                image_paths,
+                output_dir,
+                SIMPLE_ALPHA,
+            )
+            log_event(
+                "MANIFEST",
+                source=source_file.name,
+                path=manifest_path,
+                images=len(image_paths),
+                status="complete",
+            )
 
             stage = "save_state"
             state["files"][key] = {
                 "status": "success",
                 "processed_time_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "images": relative_image_paths(image_paths, output_root),
+                "manifest": relative_image_paths([manifest_path], output_root)[0],
             }
             save_state(state_file, state)
 
