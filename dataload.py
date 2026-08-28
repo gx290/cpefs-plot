@@ -171,24 +171,18 @@ def get_variable_configs(config: dict, dimension: str) -> list[dict]:
     return result
 
 
-def squeeze_to_grid(data_array: xr.DataArray, source_name: str) -> xr.DataArray:
-    """去掉长度为1的维度，并确保变量最终是二维网格。"""
+def squeeze_to_dimensions(
+    data_array: xr.DataArray,
+    source_name: str,
+    expected_dimensions: int,
+) -> xr.DataArray:
+    """去掉长度为1的维度，并检查剩余维度数量。"""
     result = data_array.squeeze(drop=True)
-    if result.ndim != 2:
+    if result.ndim != expected_dimensions:
         raise ValueError(
-            f"Variable {source_name} must become a 2-D grid after squeezing; "
+            f"Variable {source_name} must have {expected_dimensions} dimensions "
+            f"after squeezing; "
             f"actual dimensions are {result.dims}"
-        )
-    return result
-
-
-def squeeze_to_volume(data_array: xr.DataArray, source_name: str) -> xr.DataArray:
-    """去掉长度为1的维度，并确保变量最终是气压层加二维网格的三维数据。"""
-    result = data_array.squeeze(drop=True)
-    if result.ndim != 3:
-        raise ValueError(
-            f"Variable {source_name} must become a 3-D pressure-level volume after "
-            f"squeezing; actual dimensions are {result.dims}"
         )
     return result
 
@@ -209,8 +203,8 @@ def extract_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
     if missing_names:
         raise KeyError(f"Variables not found in dataset: {missing_names}")
 
-    latitude = squeeze_to_grid(ds[latitude_name], latitude_name).copy()
-    longitude = squeeze_to_grid(ds[longitude_name], longitude_name).copy()
+    latitude = squeeze_to_dimensions(ds[latitude_name], latitude_name, 2).copy()
+    longitude = squeeze_to_dimensions(ds[longitude_name], longitude_name, 2).copy()
     if latitude.dims != longitude.dims or latitude.shape != longitude.shape:
         raise ValueError("Latitude and longitude grids do not have matching dimensions")
 
@@ -218,7 +212,7 @@ def extract_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
     for item in variable_configs:
         source_name = get_source_name(item)
         output_name = item["name"]
-        data_array = squeeze_to_grid(ds[source_name], source_name).copy()
+        data_array = squeeze_to_dimensions(ds[source_name], source_name, 2).copy()
         if data_array.dims != latitude.dims:
             try:
                 data_array = data_array.transpose(*latitude.dims)
@@ -262,8 +256,8 @@ def extract_3d_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
     if missing_names:
         raise KeyError(f"3-D variables not found in dataset: {missing_names}")
 
-    latitude = squeeze_to_grid(ds[latitude_name], latitude_name).copy()
-    longitude = squeeze_to_grid(ds[longitude_name], longitude_name).copy()
+    latitude = squeeze_to_dimensions(ds[latitude_name], latitude_name, 2).copy()
+    longitude = squeeze_to_dimensions(ds[longitude_name], longitude_name, 2).copy()
     if latitude.dims != longitude.dims or latitude.shape != longitude.shape:
         raise ValueError("Latitude and longitude grids do not have matching dimensions")
 
@@ -280,7 +274,7 @@ def extract_3d_data(ds: xr.Dataset, config: dict) -> xr.Dataset:
     for item in variable_configs:
         source_name = get_source_name(item)
         output_name = item["name"]
-        data_array = squeeze_to_volume(ds[source_name], source_name).copy()
+        data_array = squeeze_to_dimensions(ds[source_name], source_name, 3).copy()
         try:
             data_array = data_array.transpose(*expected_dimensions)
         except ValueError as exc:

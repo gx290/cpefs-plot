@@ -15,24 +15,22 @@ from product_plotter import (
     SIMPLE_ALPHA,
     expected_image_paths,
     parse_product_filename,
-    parse_time_details_from_filename,
-    parse_time_from_filename,
     plot_source_file,
 )
 
 
-def format_log_value(value) -> str:
-    """将日志字段格式化为便于程序和人工查看的形式。"""
-    if isinstance(value, bool):
-        return str(value).lower()
-    if isinstance(value, (int, float)):
-        return str(value)
-    return json.dumps(str(value), ensure_ascii=False)
-
-
 def log_event(event: str, **fields) -> None:
     """以统一的 key=value 格式输出运行节点。"""
-    details = " ".join(f"{key}={format_log_value(value)}" for key, value in fields.items())
+    parts = []
+    for key, value in fields.items():
+        if isinstance(value, bool):
+            text = str(value).lower()
+        elif isinstance(value, (int, float)):
+            text = str(value)
+        else:
+            text = json.dumps(str(value), ensure_ascii=False)
+        parts.append(f"{key}={text}")
+    details = " ".join(parts)
     print(f"[{event}] {details}".rstrip(), flush=True)
 
 
@@ -66,25 +64,6 @@ def render_template(template: str, tokens: dict[str, str]) -> str:
         raise ValueError(f"Unsupported time placeholder in template: {exc.args[0]}") from exc
 
 
-def resolve_source_directory(config: dict, tokens: dict[str, str]) -> Path:
-    """根据源目录模板生成实际源目录。"""
-    source_config = config["source"]
-    relative_dir = render_template(source_config["directory_template"], tokens)
-    return Path(source_config["root_dir"]) / relative_dir
-
-
-def resolve_output_directory(
-    config: dict,
-    init_time: datetime,
-    forecast_hour: int,
-) -> Path:
-    """返回 schema_v3 使用的模式图片根目录。"""
-    output_config = config["output"]
-    output_dir = Path(output_config["root_dir"])
-    output_dir.mkdir(parents=True, exist_ok=True)
-    return output_dir
-
-
 def get_scan_window(config: dict, input_time: datetime, redraw: bool) -> tuple[datetime, datetime]:
     """计算正常回溯或精确重绘使用的 UTC 时间窗口。"""
     if redraw:
@@ -98,10 +77,16 @@ def get_scan_window(config: dict, input_time: datetime, redraw: bool) -> tuple[d
 
 def get_source_directories(config: dict, start_time: datetime, end_time: datetime) -> list[Path]:
     """按小时渲染源目录模板，并去除日期模板产生的重复目录。"""
+    source_config = config["source"]
+    source_root = Path(source_config["root_dir"])
     directories: dict[Path, Path] = {}
     current_time = start_time
     while current_time <= end_time:
-        source_dir = resolve_source_directory(config, build_time_tokens(current_time))
+        relative_dir = render_template(
+            source_config["directory_template"],
+            build_time_tokens(current_time),
+        )
+        source_dir = source_root / relative_dir
         directories[source_dir.resolve()] = source_dir
         current_time += timedelta(hours=1)
     return list(directories.values())
@@ -139,12 +124,13 @@ def collect_source_files(
             stats["files_discovered"] += 1
 
             try:
-                file_init_time, _, file_time_format = parse_time_details_from_filename(str(source_file))
+                file_init_time = parse_product_filename(source_file).init_time
             except ValueError as exc:
                 stats["files_parse_failed"] += 1
                 log_event("FILTER", source=source_file, reason="filename_parse_failed", detail=exc)
                 continue
 
+            file_time_format = "%Y%m%d%H"
             file_time_text = file_init_time.strftime(file_time_format)
             start_time_text = start_time.strftime(file_time_format)
             end_time_text = end_time.strftime(file_time_format)
@@ -162,7 +148,7 @@ def collect_source_files(
 
     result = sorted(
         source_files.values(),
-        key=lambda path: (parse_time_from_filename(str(path))[0], path.name),
+        key=lambda path: (parse_product_filename(path).init_time, path.name),
     )
     stats["files_matched"] = len(result)
     return result, stats
@@ -303,7 +289,7 @@ def load_relevant_states(
     """只加载待检查源文件涉及的按日状态，以及旧版全局状态。"""
     state_cache: dict[Path, dict] = {}
     for source_file in source_files:
-        init_time, _ = parse_time_from_filename(str(source_file))
+        init_time = parse_product_filename(source_file).init_time
         state_file = resolve_state_file(config, init_time)
         if state_file not in state_cache:
             state_cache[state_file] = load_state(state_file)
@@ -329,6 +315,7 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
     start_time, end_time = get_scan_window(config, input_time, redraw)
     source_root = Path(config["source"]["root_dir"])
     output_root = Path(config["output"]["root_dir"])
+    output_root.mkdir(parents=True, exist_ok=True)
 
     log_event(
         "CONFIG",
@@ -391,7 +378,7 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
         product_metadata = parse_product_filename(source_file)
         file_init_time = product_metadata.init_time
         forecast_hour = product_metadata.forecast_hour
-        output_dir = resolve_output_directory(config, file_init_time, forecast_hour)
+        output_dir = output_root
         state_file = resolve_state_file(config, file_init_time)
         state = state_cache[state_file]
         key = source_key(source_file, source_root)

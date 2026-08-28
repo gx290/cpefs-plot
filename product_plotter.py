@@ -103,18 +103,6 @@ def parse_product_filename(data_file: str | Path) -> ProductMetadata:
     )
 
 
-def parse_time_details_from_filename(data_file: str) -> tuple[datetime, int, str]:
-    """向批处理返回起报时间、当前时效和文件时间格式。"""
-    metadata = parse_product_filename(data_file)
-    return metadata.init_time, metadata.forecast_hour, "%Y%m%d%H"
-
-
-def parse_time_from_filename(data_file: str) -> tuple[datetime, int]:
-    """兼容原批处理调用方式。"""
-    metadata = parse_product_filename(data_file)
-    return metadata.init_time, metadata.forecast_hour
-
-
 def normalize_unit(unit: str) -> str:
     """将常见的同义单位转换为统一标识。"""
     normalized = unit.strip().lower().replace(" ", "")
