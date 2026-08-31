@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
+from time import perf_counter
 
 import cartopy.crs as ccrs
 import cartopy.io.shapereader as shpreader
@@ -722,6 +723,7 @@ def plot_one_variable(
     variable_config: dict,
     metadata: ProductMetadata,
     output_dir: Path,
+    timing_records: list[str],
 ) -> list[Path]:
     """为一个要素分别绘制完整图和透明图。"""
     latitude_name = config["plot"]["latitude"]
@@ -759,6 +761,7 @@ def plot_one_variable(
         variable_config,
         complete=False,
     )
+    started = perf_counter()
     draw_complete_image(
         latitude,
         longitude,
@@ -772,6 +775,12 @@ def plot_one_variable(
         config,
         complete_file,
     )
+    timing_records.append(
+        f"[TIMING] image=complete dimension=2D variable={variable_name} "
+        f"seconds={perf_counter() - started:.2f} file={complete_file.name}"
+    )
+
+    started = perf_counter()
     draw_simple_image(
         latitude,
         longitude,
@@ -780,6 +789,10 @@ def plot_one_variable(
         norm,
         config["plot"]["extent"],
         simple_file,
+    )
+    timing_records.append(
+        f"[TIMING] image=simple dimension=2D variable={variable_name} "
+        f"seconds={perf_counter() - started:.2f} file={simple_file.name}"
     )
     return [complete_file, simple_file]
 
@@ -791,6 +804,7 @@ def plot_one_3d_level(
     metadata: ProductMetadata,
     pressure_level: int | float,
     output_dir: Path,
+    timing_records: list[str],
 ) -> list[Path]:
     """为一个三维要素的一个气压层分别绘制完整图和透明图。"""
     plot_config = config["plot"]
@@ -831,6 +845,7 @@ def plot_one_3d_level(
         pressure_level,
         complete=False,
     )
+    started = perf_counter()
     draw_complete_image(
         latitude,
         longitude,
@@ -845,6 +860,13 @@ def plot_one_3d_level(
         complete_file,
         pressure_level=pressure_level,
     )
+    timing_records.append(
+        f"[TIMING] image=complete dimension=3D variable={variable_name} "
+        f"level={format_pressure_level(pressure_level)}hpa "
+        f"seconds={perf_counter() - started:.2f} file={complete_file.name}"
+    )
+
+    started = perf_counter()
     draw_simple_image(
         latitude,
         longitude,
@@ -854,6 +876,11 @@ def plot_one_3d_level(
         plot_config["extent"],
         simple_file,
     )
+    timing_records.append(
+        f"[TIMING] image=simple dimension=3D variable={variable_name} "
+        f"level={format_pressure_level(pressure_level)}hpa "
+        f"seconds={perf_counter() - started:.2f} file={simple_file.name}"
+    )
     return [complete_file, simple_file]
 
 
@@ -862,6 +889,7 @@ def plot_3d_variables(
     config: dict,
     metadata: ProductMetadata,
     output_dir: Path,
+    timing_records: list[str],
 ) -> list[Path]:
     """逐气压层绘制配置中的全部三维要素。"""
     variable_configs = get_variable_configs(config, "3D")
@@ -882,6 +910,7 @@ def plot_3d_variables(
                     metadata,
                     level_value,
                     output_dir,
+                    timing_records,
                 )
             )
     return image_files
@@ -895,6 +924,8 @@ def plot_source_file(
     output_dir: Path,
 ) -> list[Path]:
     """绘制一个源文件中配置的全部二维要素和逐层三维要素。"""
+    started = perf_counter()
+    timing_records = []
     metadata = parse_product_filename(source_file)
     image_files = []
     for variable_config in get_variable_configs(config, "2D"):
@@ -905,7 +936,24 @@ def plot_source_file(
                 variable_config,
                 metadata,
                 output_dir,
+                timing_records,
             )
         )
-    image_files.extend(plot_3d_variables(dataset_3d, config, metadata, output_dir))
+    image_files.extend(
+        plot_3d_variables(dataset_3d, config, metadata, output_dir, timing_records)
+    )
+    elapsed_seconds = perf_counter() - started
+    summary = (
+        f"[TIMING] scope=nc_images source={Path(source_file).name} "
+        f"images={len(image_files)} seconds={elapsed_seconds:.2f}"
+    )
+    timing_records.append(summary)
+
+    timing_file = Path(output_dir) / "timing.txt"
+    timing_file.parent.mkdir(parents=True, exist_ok=True)
+    with timing_file.open("a", encoding="utf-8") as file:
+        file.write(f"\n[{datetime.now():%Y-%m-%d %H:%M:%S}]\n")
+        file.write("\n".join(timing_records) + "\n")
+
+    print(summary, flush=True)
     return image_files

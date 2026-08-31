@@ -516,7 +516,6 @@ def process_batch(config: dict, input_time: datetime, redraw: bool) -> int:
                 "DONE",
                 source=source_file.name,
                 images=len(image_paths),
-                elapsed_seconds=round(perf_counter() - file_started, 2),
             )
         except Exception as exc:
             state["files"][key] = {
