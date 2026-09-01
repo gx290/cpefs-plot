@@ -34,6 +34,10 @@ IMAGE_DPI = 100
 MAP_BACKGROUND = "#ffffff"
 FIGURE_BACKGROUND = "#ffffff"
 SIMPLE_ALPHA = 0.9
+MAP_AXES_POSITION = [0.06, 0.04, 0.87, 0.91]
+MAP_OVERLAY_CACHE = {}
+USE_RENDERED_MAP_CACHE = True
+TIMING_FILE_NAME = f"timing_{datetime.now():%Y%m%d_%H%M%S_%f}.txt"
 
 @dataclass(frozen=True)
 class ProductMetadata:
@@ -390,6 +394,57 @@ def add_china_province_labels(ax, config: dict, extent: list[float]) -> None:
         )
 
 
+def get_rendered_map_overlay(config: dict, extent: list[float]) -> np.ndarray:
+    """绘制并缓存透明的行政区边界、名称和地图边框。"""
+    boundary_config = config["boundaries"]
+    cache_key = (
+        *extent,
+        boundary_config["country_file"],
+        boundary_config["province_file"],
+        boundary_config["city_file"],
+        boundary_config["district_file"],
+        boundary_config["country_linewidth"],
+        boundary_config["province_linewidth"],
+        boundary_config["city_linewidth"],
+        boundary_config["district_linewidth"],
+    )
+    if cache_key in MAP_OVERLAY_CACHE:
+        return MAP_OVERLAY_CACHE[cache_key]
+
+    figure = plt.figure(figsize=COMPLETE_SIZE, dpi=IMAGE_DPI)
+    figure.patch.set_alpha(0)
+    axis = figure.add_axes(MAP_AXES_POSITION, projection=ccrs.PlateCarree())
+    axis.set_extent(extent, crs=ccrs.PlateCarree())
+    axis.set_aspect("auto")
+    axis.patch.set_alpha(0)
+    axis.set_xticks([])
+    axis.set_yticks([])
+    add_map_boundaries(axis, config, extent)
+    add_china_province_labels(axis, config, extent)
+    for spine in axis.spines.values():
+        spine.set_linewidth(2.0)
+        spine.set_edgecolor("#111111")
+
+    figure.canvas.draw()
+    overlay = np.asarray(figure.canvas.buffer_rgba()).copy()
+    plt.close(figure)
+    MAP_OVERLAY_CACHE[cache_key] = overlay
+    return overlay
+
+
+def add_rendered_map_overlay(figure, config: dict, extent: list[float]) -> None:
+    """将缓存的透明底图覆盖到色斑上方。"""
+    overlay_axis = figure.add_axes([0, 0, 1, 1], zorder=7)
+    overlay_axis.patch.set_alpha(0)
+    overlay_axis.imshow(
+        get_rendered_map_overlay(config, extent),
+        origin="upper",
+        interpolation="none",
+        aspect="auto",
+    )
+    overlay_axis.set_axis_off()
+
+
 def draw_discrete_colorbar(
     fig,
     variable_config: dict,
@@ -621,7 +676,7 @@ def draw_complete_image(
     """按照样例图4绘制白底、顶部标题和内嵌色标的完整产品。"""
     extent = config["plot"]["extent"]
     figure = plt.figure(figsize=COMPLETE_SIZE, dpi=IMAGE_DPI, facecolor=FIGURE_BACKGROUND)
-    axis = figure.add_axes([0.06, 0.04, 0.87, 0.91], projection=ccrs.PlateCarree())
+    axis = figure.add_axes(MAP_AXES_POSITION, projection=ccrs.PlateCarree())
     axis.set_extent(extent, crs=ccrs.PlateCarree())
     axis.set_aspect("auto")
     axis.set_facecolor(MAP_BACKGROUND)
@@ -639,12 +694,16 @@ def draw_complete_image(
         antialiased=False,
         zorder=2,
     )
-    add_map_boundaries(axis, config, extent)
-    add_china_province_labels(axis, config, extent)
-
-    for spine in axis.spines.values():
-        spine.set_linewidth(2.0)
-        spine.set_edgecolor("#111111")
+    if USE_RENDERED_MAP_CACHE:
+        for spine in axis.spines.values():
+            spine.set_visible(False)
+        add_rendered_map_overlay(figure, config, extent)
+    else:
+        add_map_boundaries(axis, config, extent)
+        add_china_province_labels(axis, config, extent)
+        for spine in axis.spines.values():
+            spine.set_linewidth(2.0)
+            spine.set_edgecolor("#111111")
 
     pressure_text = (
         f"  {format_pressure_level(pressure_level)} hPa"
@@ -949,7 +1008,7 @@ def plot_source_file(
     )
     timing_records.append(summary)
 
-    timing_file = Path(output_dir) / "timing.txt"
+    timing_file = Path(output_dir).parent / "time" / TIMING_FILE_NAME
     timing_file.parent.mkdir(parents=True, exist_ok=True)
     with timing_file.open("a", encoding="utf-8") as file:
         file.write(f"\n[{datetime.now():%Y-%m-%d %H:%M:%S}]\n")
